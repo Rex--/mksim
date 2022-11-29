@@ -1,3 +1,3 @@
-module git.mckinnon.ninja/rex/mksim
+module mksim
 
 go 1.19

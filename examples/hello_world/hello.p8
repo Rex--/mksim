@@ -5,7 +5,11 @@
 / It is licensed under the terms of CC BY-SA 3.0, available here:
 / https://creativecommons.org/licenses/by-sa/3.0/
 /
-/ MODIFIED: 2022-11-28 Rex McKinnon 
+/ MODIFIED: 2022-11-28 Rex McKinnon
+/    Modified the source to compile with pdpnasm.
+
+TSF=6041
+TLS=6046
 
 *10                   / Set current assembly origin to address 10,
 STPTR,    STRNG-1     / An auto-increment register (one of eight at 10-17)
