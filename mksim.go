@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
+	"strings"
 )
 
 // Instructions
@@ -66,6 +68,9 @@ type MK12 struct {
 	STATE struct {
 		// If halt is set, the computer is halted during the fetch phase
 		HALT bool
+
+		// If SSTEP is set, the computer halts after every instruction
+		SSTEP bool
 	}
 
 	// The IOT struct holds IO devices
@@ -77,14 +82,39 @@ type MK12 struct {
 
 // This function handles the HALT state, listening for inputs
 func (mk *MK12) halt() {
-	// fmt.Printf("** SYSTEM HALTED **\n [ENTER]\tCONTINUE\n [CTRL] + [C]\tEXIT\n")
-	// for mk.STATE.HALT {
-	// }
+	// Listen for keyboard inputs
+	if !mk.STATE.SSTEP {
+		fmt.Printf("** SYSTEM HALTED **\n [ENTER]\tCONTINUE\n [CTRL] + [C]\tEXIT\n S\tSINGLE STEP\n$")
+	}
+	stdin := bufio.NewReader(os.Stdin)
+	for mk.STATE.HALT {
+		cmd, err := stdin.ReadString('\n')
+		if err != nil {
+			fmt.Printf("ERROR COMMAND: '%s' 0x%X\n", cmd, cmd)
+			panic(err)
+		}
+		// fmt.Printf("Got char: '%c' 0x%X\n", b, b)
+		switch cmd {
+		case "\n":
+			mk.STATE.HALT = false
+
+		case "S\n":
+			if mk.STATE.SSTEP {
+				mk.STATE.SSTEP = false
+			} else {
+				mk.STATE.SSTEP = true
+			}
+			mk.STATE.HALT = false
+
+		default:
+			fmt.Printf("UNKNOWN\t'%s'\n$", strings.TrimSpace(cmd))
+		}
+	}
 	// fmt.Println("*******************")
 	// fmt.Println("** SYSTEM HALTED **")
 	// fmt.Println("***** GOODBYE *****")
 	// fmt.Println("*******************")
-	os.Exit(0)
+	// os.Exit(0)
 }
 
 // This function implements the fetch process:
@@ -96,6 +126,11 @@ func (mk *MK12) halt() {
 //     4b) If indirect bit is set, the EA contains the actual address to use
 //  5. Fetches the Content of the Effective Address (CA) for instructions that require an operand
 func (mk *MK12) fetch() {
+
+	// Set HALT if single stepping
+	if mk.STATE.SSTEP {
+		mk.STATE.HALT = true
+	}
 
 	// Catch halt
 	if mk.STATE.HALT {
@@ -315,6 +350,15 @@ func (mk *MK12) execute() {
 	}
 }
 
+func (mk *MK12) run() {
+	// Loop forever, executing the current instruction,
+	// then fetching the next
+	for {
+		mk.execute()
+		mk.fetch()
+	}
+}
+
 func main() {
 	// Check arguments
 	if len(os.Args) == 1 {
@@ -337,10 +381,5 @@ func main() {
 	myMK12.PC = 0o200
 	myMK12.fetch()
 
-	// Loop forever, executing the current instruction,
-	// then fetching the next
-	for {
-		myMK12.execute()
-		myMK12.fetch()
-	}
+	myMK12.run()
 }
