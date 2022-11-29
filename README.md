@@ -12,7 +12,12 @@ figuratively prints the character to stdout.
 
 Usage
 ----------
-Pass the compiled object file as the first argument:
+First, build the `mksim` executable. In the repo directory run:
+```
+go build .
+```
+
+To run a program, pass the compiled object file as the first argument:
 ```
 ./mksim examples/hello_world/hello.po
 ```
