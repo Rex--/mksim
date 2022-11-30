@@ -1,10 +1,12 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
+	"log"
 	"os"
-	"strings"
+	"time"
+
+	"github.com/jroimartin/gocui"
 )
 
 // Instructions
@@ -78,43 +80,40 @@ type MK12 struct {
 		// Teleprinter flag
 		PRINTER bool
 	}
+
+	// Gui attached to this computer
+	g *gocui.Gui
 }
 
 // This function handles the HALT state, listening for inputs
 func (mk *MK12) halt() {
 	// Listen for keyboard inputs
 	if !mk.STATE.SSTEP {
-		fmt.Printf("** SYSTEM HALTED **\n [ENTER]\tCONTINUE\n [CTRL] + [C]\tEXIT\n S\tSINGLE STEP\n$")
+		debugPrint(mk.g, "** SYSTEM HALTED **  [ENTER] CONTINUE  |  [CTRL] + [C] EXIT  |  [SPACE] SINGLE STEP")
+		updateStatus(mk.g, "HALT", gocui.AttrBold|gocui.ColorRed)
+	} else {
+		updateStatus(mk.g, "STEP", gocui.AttrBold|gocui.ColorBlue)
 	}
-	stdin := bufio.NewReader(os.Stdin)
+	// stdin := bufio.NewReader(os.Stdin)
 	for mk.STATE.HALT {
-		cmd, err := stdin.ReadString('\n')
-		if err != nil {
-			fmt.Printf("ERROR COMMAND: '%s' 0x%X\n", cmd, cmd)
-			panic(err)
-		}
-		// fmt.Printf("Got char: '%c' 0x%X\n", b, b)
-		switch cmd {
-		case "\n":
+		c := getLastKey()
+		switch *c {
+		case '\n':
+			// debugPrint(mk.g, "Detected [ENTER]")
+			mk.STATE.SSTEP = false
 			mk.STATE.HALT = false
 
-		case "S\n":
-			if mk.STATE.SSTEP {
-				mk.STATE.SSTEP = false
-			} else {
-				mk.STATE.SSTEP = true
-			}
+		case ' ':
+			// debugPrint(mk.g, "Detected [SPACE]")
+			mk.STATE.SSTEP = true
 			mk.STATE.HALT = false
+
+		case 0: // No keypress
 
 		default:
-			fmt.Printf("UNKNOWN\t'%s'\n$", strings.TrimSpace(cmd))
+			debugPrint(mk.g, fmt.Sprintf("UNKNOWN\t'%c'", *c))
 		}
 	}
-	// fmt.Println("*******************")
-	// fmt.Println("** SYSTEM HALTED **")
-	// fmt.Println("***** GOODBYE *****")
-	// fmt.Println("*******************")
-	// os.Exit(0)
 }
 
 // This function implements the fetch process:
@@ -127,6 +126,11 @@ func (mk *MK12) halt() {
 //  5. Fetches the Content of the Effective Address (CA) for instructions that require an operand
 func (mk *MK12) fetch() {
 
+	// Check if step button pressed
+	if c := getLastKey(); *c == ' ' {
+		mk.STATE.SSTEP = true
+	}
+
 	// Set HALT if single stepping
 	if mk.STATE.SSTEP {
 		mk.STATE.HALT = true
@@ -136,6 +140,9 @@ func (mk *MK12) fetch() {
 	if mk.STATE.HALT {
 		mk.halt()
 	}
+
+	// Update to RUN status after returning from HALT or STEP
+	updateStatus(mk.g, "RUN", gocui.AttrBold|gocui.ColorGreen)
 
 	// Load PC into MA to get next instruction,
 	// Save PC into MB for later use (indirect addressing)
@@ -193,62 +200,76 @@ func (mk *MK12) execute() {
 	case AND:
 		// AND data with AC and store it back in AC
 		tAC := mk.AC & mk.MB
-		// fmt.Printf("AND %o & %o = %o --> AC\n", mk.AC, mk.MB, tAC)
+		debugPrint(mk.g, fmt.Sprintf("AND %o & %o = %o --> AC", mk.AC, mk.MB, tAC))
 		mk.AC = tAC
 	case TAD:
 		tAC, c := MKadd(mk.AC, mk.MB)
-		// fmt.Printf("TAD %d + %d = %d --> AC\n", mk.AC, mk.MB, tAC)
+		debugPrint(mk.g, fmt.Sprintf("TAD %d + %d = %d --> AC", mk.AC, mk.MB, tAC))
 		mk.L = c
 		mk.AC = tAC
 	case ISZ:
 		// Increment MB and store it in MEM
 		mk.MB, _ = MKadd(mk.MB, 1)
 		mk.MEM[mk.MA] = mk.MB
-		// fmt.Printf("ISZ %o + 1 = %o --> %o\n", mk.MB-1, mk.MB, mk.MA)
 		// If MB is zero, skip next instruction
 		if mk.MB == 0 {
-			// fmt.Printf("+SKP %o\n", mk.PC)
+			debugPrint(mk.g, fmt.Sprintf("ISZ %o + 1 = %o --> %o; SKP %o", mk.MB-1, mk.MB, mk.MA, mk.PC))
 			mk.PC = mk.PC + 1
+		} else {
+			debugPrint(mk.g, fmt.Sprintf("ISZ %o + 1 = %o --> %o", mk.MB-1, mk.MB, mk.MA))
 		}
 	case DCA:
 		mk.MB = mk.AC
 		mk.MEM[mk.MA] = mk.MB
 		mk.AC = 0
-		// fmt.Printf("DCA %o --> %o ; 0 --> AC\n", mk.MB, mk.MA)
+		debugPrint(mk.g, fmt.Sprintf("DCA %o --> %o ; 0 --> AC", mk.MB, mk.MA))
 	case JMS:
 		mk.MEM[mk.MA] = mk.PC
-		// fmt.Printf("JMS %o ; RET %o\n", mk.MA, mk.PC)
+		debugPrint(mk.g, fmt.Sprintf("JMS %o ; RET %o", mk.MA, mk.PC))
 		mk.PC = mk.MA + 1
 	case JMP:
 		// Jump to the address stored in MA by storing it in the PC
 		mk.PC = mk.MA
-		// fmt.Printf("JMP %o\n", mk.MA)
+		debugPrint(mk.g, fmt.Sprintf("JMP %o", mk.MA))
 	case IOT:
 		devAddr := (mk.IR >> 3) & 0o77
 		devReq := mk.IR & 0o7
 
+		var debugInst string
 		switch devAddr {
 		case 4: // Teletype teleprinter/punch (stdout)
+			debugInst += "IOT TELEPRINTER "
 			if devReq == 1 { // Skip if flag is true
+				debugInst += "SKIP"
 				if mk.IOT.PRINTER {
 					mk.PC = mk.PC + 1
+					debugInst += "(T) "
+				} else {
+					debugInst += "(F) "
 				}
 			}
 			if devReq == 2 { // Clear flag
 				mk.IOT.PRINTER = false
+				debugInst += "CLF "
 			}
 			if devReq == 4 { // Load char from AC and print it
-				fmt.Printf("%c", mk.AC)
+				consolePrint(mk.g, fmt.Sprintf("%c", mk.AC))
 				mk.IOT.PRINTER = true
+				debugInst += "PRINT"
 			}
 
 			if devReq == 6 { // Combo of the two above: print char and clear flag
 				mk.IOT.PRINTER = false
-				fmt.Printf("%c", mk.AC)
+				consolePrint(mk.g, fmt.Sprintf("%c", mk.AC))
 				mk.IOT.PRINTER = true
+				debugInst += "PRINT CLF"
 			}
 		default:
 			panic("IOT device not implemented")
+		}
+
+		if debugInst != "" {
+			debugPrint(mk.g, debugInst)
 		}
 
 	case OPR:
@@ -267,15 +288,20 @@ func (mk *MK12) execute() {
 
 		switch group {
 		case OPR_GROUP_1:
+			var debugInst string = "OPR "
+
 			if ((mk.IR >> 7) & 1) == 1 { // CLA - Clear Accumulator
 				mk.AC = 0
+				debugInst += "CLA "
 			}
 			if ((mk.IR >> 6) & 1) == 1 { // CLL - Clear Link
 				mk.L = false
+				debugInst += "CLL "
 			}
 
 			if ((mk.IR >> 5) & 1) == 1 { // CMA - Complement Accumulator
 				mk.AC = MKcomplement(mk.AC)
+				debugInst += "CMA "
 			}
 			if ((mk.IR >> 4) & 1) == 1 { // CML - Complement Link
 				if mk.L {
@@ -283,10 +309,12 @@ func (mk *MK12) execute() {
 				} else {
 					mk.L = true
 				}
+				debugInst += "CML "
 			}
 
 			if ((mk.IR) & 1) == 1 { // IAC - Increment Accumulator
 				mk.AC, mk.L = MKadd(mk.AC, 1)
+				debugInst += "IAC"
 			}
 
 			if ((mk.IR >> 3) & 1) == 1 { // RAR
@@ -299,37 +327,50 @@ func (mk *MK12) execute() {
 				panic("rotate not implemented")
 			}
 
+			if debugInst != "" {
+				debugPrint(mk.g, debugInst)
+			}
+
 		case OPR_GROUP_2:
+			var debugInst string = "OPR "
 			if ((mk.IR >> 7) & 1) == 1 { // CLA - Clear AC
 				mk.AC = 0
+				debugInst += "CLA "
 			}
 
 			// Determine state of skip conditions
+			debugInst += "("
 			skip := false
 			if ((mk.IR >> 6) & 1) == 1 { // SMA - Skip on AC < 0
 				if mk.AC < 0 {
 					skip = true
 				}
+				debugInst += "SMA "
 			}
 			if ((mk.IR >> 5) & 1) == 1 { // SZA - Skip on AC == 0
 				if mk.AC == 0 {
 					skip = true
 				}
+				debugInst += "SZA "
 			}
 			if ((mk.IR >> 4) & 1) == 1 { // SNL - Skip on L == 1
 				if mk.L {
 					skip = true
 				}
+				debugInst += "SNL "
 			}
+			debugInst += ")"
 			// Do the actual skip
 			if ((mk.IR >> 3) & 1) == 1 { // Sense of skip (any or none)
 				// If bit is set, no skip occurs if any condition has been satisfied (skip=true)
 				if !skip {
 					mk.PC = mk.PC + 1
+					debugInst += "SKIP[NOR] "
 				}
 			} else {
 				// If bit is not set, skip occurs if any condition is satisfied
 				if skip {
+					debugInst += "SKIP[OR] "
 					mk.PC = mk.PC + 1
 				}
 			}
@@ -338,7 +379,12 @@ func (mk *MK12) execute() {
 				panic("switch register not implemented")
 			}
 			if ((mk.IR >> 1) & 1) == 1 { // HLT - Halt the system
+				debugInst += "HALT"
 				mk.STATE.HALT = true
+			}
+
+			if debugInst != "" {
+				debugPrint(mk.g, debugInst)
 			}
 
 		case OPR_GROUP_3:
@@ -351,11 +397,22 @@ func (mk *MK12) execute() {
 }
 
 func (mk *MK12) run() {
-	// Loop forever, executing the current instruction,
-	// then fetching the next
+	// Init the registers with some default value because we get stuck in the first fetch halt loop
+	updateRegister(mk.g, "accumulator-register", mk.AC)
+	updateRegister(mk.g, "counter-register", mk.PC)
+	updateRegister(mk.g, "instruction-register", mk.IR)
+	updateRegister(mk.g, "address-register", mk.MA)
+	updateRegister(mk.g, "buffer-register", mk.MB)
+	// Loop forever
 	for {
-		mk.execute()
 		mk.fetch()
+		mk.execute()
+		updateRegister(mk.g, "accumulator-register", mk.AC)
+		updateRegister(mk.g, "counter-register", mk.PC)
+		updateRegister(mk.g, "instruction-register", mk.IR)
+		updateRegister(mk.g, "address-register", mk.MA)
+		updateRegister(mk.g, "buffer-register", mk.MB)
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
@@ -366,8 +423,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Create our console user interface for the computer
+	gui := CUI()
+	defer gui.Close()
+
 	// Create a new MK-12 computer
-	myMK12 := MK12{}
+	myMK12 := MK12{g: gui}
 
 	// Load our compiled object file into memory
 	inFile := os.Args[1]
@@ -377,9 +438,13 @@ func main() {
 	}
 	myMK12.MEM = m
 
-	// Set PC to RESET vector and fetch first instruction
+	// Set PC to RESET vector and start computer HALTed
 	myMK12.PC = 0o200
-	myMK12.fetch()
+	myMK12.STATE.HALT = true
+	go myMK12.run()
 
-	myMK12.run()
+	// CUI Loop
+	if err := gui.MainLoop(); err != nil && err != gocui.ErrQuit {
+		log.Panicln(err)
+	}
 }
