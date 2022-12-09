@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 )
 
 // Instructions
@@ -71,6 +72,9 @@ type MK12 struct {
 
 		// If SSTEP is set, the computer halts after every instruction
 		SSTEP bool
+
+		// If EXIT is set, the computer exits upon a HLT instruction
+		EXIT bool
 	}
 
 	// The IOT struct holds IO devices
@@ -78,10 +82,21 @@ type MK12 struct {
 		// Teleprinter flag
 		PRINTER bool
 	}
+
+	// The HW struct contains information about the simulated hardware
+	HW struct {
+		// F_CPU is the theoretical clock speed in Hz
+		F_CPU int64
+	}
 }
 
 // This function handles the HALT state, listening for inputs
 func (mk *MK12) halt() {
+	// If EXIT flag is set, we exit upon a halt
+	if mk.STATE.EXIT {
+		os.Exit(0)
+	}
+
 	// Listen for keyboard inputs
 	if !mk.STATE.SSTEP {
 		fmt.Printf("** SYSTEM HALTED **\n [ENTER]\tCONTINUE\n [CTRL] + [C]\tEXIT\n S\tSINGLE STEP\n$")
@@ -110,11 +125,6 @@ func (mk *MK12) halt() {
 			fmt.Printf("UNKNOWN\t'%s'\n$", strings.TrimSpace(cmd))
 		}
 	}
-	// fmt.Println("*******************")
-	// fmt.Println("** SYSTEM HALTED **")
-	// fmt.Println("***** GOODBYE *****")
-	// fmt.Println("*******************")
-	// os.Exit(0)
 }
 
 // This function implements the fetch process:
@@ -351,35 +361,34 @@ func (mk *MK12) execute() {
 }
 
 func (mk *MK12) run() {
-	// Loop forever, executing the current instruction,
-	// then fetching the next
+	// Loop forever, fetching an instruction and then executing it
 	for {
-		mk.execute()
+		// clkStart := time.Now()
 		mk.fetch()
+		mk.execute()
+		// elapsed := time.Since(clkStart)
+		time.Sleep(time.Second - (time.Duration(mk.HW.F_CPU) * time.Microsecond))
 	}
 }
 
 func main() {
-	// Check arguments
-	if len(os.Args) == 1 {
-		fmt.Println("Usage:", os.Args[0], "<infile>")
-		os.Exit(1)
-	}
+	// Parse Arguments
+	args := parseArgs()
 
-	// Create a new MK-12 computer
+	// Create a new MK-12 computer and configure needed flags for startup
 	myMK12 := MK12{}
+	myMK12.HW.F_CPU = args.F_CPU
+	myMK12.STATE.HALT = args.HALT
+	myMK12.STATE.EXIT = args.EXIT
 
 	// Load our compiled object file into memory
-	inFile := os.Args[1]
-	m, err := LoadPObjFile(inFile)
+	m, err := LoadPObjFile(args.InFile)
 	if err != nil {
 		panic(err)
 	}
 	myMK12.MEM = m
 
-	// Set PC to RESET vector and fetch first instruction
+	// Set PC to RESET vector and start computer
 	myMK12.PC = 0o200
-	myMK12.fetch()
-
 	myMK12.run()
 }
