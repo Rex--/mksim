@@ -6,8 +6,6 @@ import (
 	"os"
 	"time"
 
-	"time"
-
 	"github.com/jroimartin/gocui"
 )
 
@@ -100,6 +98,7 @@ type MK12 struct {
 func (mk *MK12) halt() {
 	// If EXIT flag is set, we exit upon a halt
 	if mk.STATE.EXIT {
+		mk.g.Close()
 		os.Exit(0)
 	}
 
