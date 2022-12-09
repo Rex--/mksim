@@ -94,7 +94,7 @@ func (mk *MK12) halt() {
 	} else {
 		updateStatus(mk.g, "STEP", gocui.AttrBold|gocui.ColorBlue)
 	}
-	// stdin := bufio.NewReader(os.Stdin)
+
 	for mk.STATE.HALT {
 		c := getLastKey()
 		switch *c {
@@ -376,7 +376,8 @@ func (mk *MK12) execute() {
 			}
 
 			if ((mk.IR >> 2) & 1) == 1 { // OSR - OR switch register with AC
-				panic("switch register not implemented")
+				mk.AC |= mk.SR
+				debugInst += "OSR "
 			}
 			if ((mk.IR >> 1) & 1) == 1 { // HLT - Halt the system
 				debugInst += "HALT"
@@ -403,15 +404,22 @@ func (mk *MK12) run() {
 	updateRegister(mk.g, "instruction-register", mk.IR)
 	updateRegister(mk.g, "address-register", mk.MA)
 	updateRegister(mk.g, "buffer-register", mk.MB)
+	updateRegister(mk.g, "switch-register", mk.SR)
 	// Loop forever
 	for {
 		mk.fetch()
+		// Update SR after we fetch because we might be returning from a HALT, so
+		// the switches might have changed. Update it before execute for same reason
+		mk.SR = int16(switchRegister)
+
 		mk.execute()
+
 		updateRegister(mk.g, "accumulator-register", mk.AC)
 		updateRegister(mk.g, "counter-register", mk.PC)
 		updateRegister(mk.g, "instruction-register", mk.IR)
 		updateRegister(mk.g, "address-register", mk.MA)
 		updateRegister(mk.g, "buffer-register", mk.MB)
+
 		time.Sleep(10 * time.Millisecond)
 	}
 }

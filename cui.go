@@ -8,6 +8,7 @@ import (
 )
 
 var lastKey rune
+var switchRegister int
 
 func CUI() *gocui.Gui {
 	g, err := gocui.NewGui(gocui.OutputNormal)
@@ -27,6 +28,43 @@ func CUI() *gocui.Gui {
 	}
 
 	if err := g.SetKeybinding("", gocui.KeySpace, gocui.ModNone, step); err != nil {
+		log.Panicln(err)
+	}
+
+	if err := g.SetKeybinding("", gocui.KeyF1, gocui.ModNone, switchRegister1); err != nil {
+		log.Panicln(err)
+	}
+	if err := g.SetKeybinding("", gocui.KeyF2, gocui.ModNone, switchRegister2); err != nil {
+		log.Panicln(err)
+	}
+	if err := g.SetKeybinding("", gocui.KeyF3, gocui.ModNone, switchRegister3); err != nil {
+		log.Panicln(err)
+	}
+	if err := g.SetKeybinding("", gocui.KeyF4, gocui.ModNone, switchRegister4); err != nil {
+		log.Panicln(err)
+	}
+	if err := g.SetKeybinding("", gocui.KeyF5, gocui.ModNone, switchRegister5); err != nil {
+		log.Panicln(err)
+	}
+	if err := g.SetKeybinding("", gocui.KeyF6, gocui.ModNone, switchRegister6); err != nil {
+		log.Panicln(err)
+	}
+	if err := g.SetKeybinding("", gocui.KeyF7, gocui.ModNone, switchRegister7); err != nil {
+		log.Panicln(err)
+	}
+	if err := g.SetKeybinding("", gocui.KeyF8, gocui.ModNone, switchRegister8); err != nil {
+		log.Panicln(err)
+	}
+	if err := g.SetKeybinding("", gocui.KeyF9, gocui.ModNone, switchRegister9); err != nil {
+		log.Panicln(err)
+	}
+	if err := g.SetKeybinding("", gocui.KeyF10, gocui.ModNone, switchRegister10); err != nil {
+		log.Panicln(err)
+	}
+	if err := g.SetKeybinding("", gocui.KeyF11, gocui.ModNone, switchRegister11); err != nil {
+		log.Panicln(err)
+	}
+	if err := g.SetKeybinding("", gocui.KeyF12, gocui.ModNone, switchRegister12); err != nil {
 		log.Panicln(err)
 	}
 
@@ -192,6 +230,67 @@ func proceed(g *gocui.Gui, v *gocui.View) error {
 
 func step(g *gocui.Gui, v *gocui.View) error {
 	lastKey = ' '
+	return nil
+}
+
+func switchRegister1(g *gocui.Gui, v *gocui.View) error {
+	switchRegister ^= 0b100000000000
+	updateRegister(g, "switch-register", int16(switchRegister))
+	return nil
+}
+func switchRegister2(g *gocui.Gui, v *gocui.View) error {
+	switchRegister ^= 0b010000000000
+	updateRegister(g, "switch-register", int16(switchRegister))
+	return nil
+}
+func switchRegister3(g *gocui.Gui, v *gocui.View) error {
+	switchRegister ^= 0b001000000000
+	updateRegister(g, "switch-register", int16(switchRegister))
+	return nil
+}
+func switchRegister4(g *gocui.Gui, v *gocui.View) error {
+	switchRegister ^= 0b000100000000
+	updateRegister(g, "switch-register", int16(switchRegister))
+	return nil
+}
+func switchRegister5(g *gocui.Gui, v *gocui.View) error {
+	switchRegister ^= 0b000010000000
+	updateRegister(g, "switch-register", int16(switchRegister))
+	return nil
+}
+func switchRegister6(g *gocui.Gui, v *gocui.View) error {
+	switchRegister ^= 0b000001000000
+	updateRegister(g, "switch-register", int16(switchRegister))
+	return nil
+}
+func switchRegister7(g *gocui.Gui, v *gocui.View) error {
+	switchRegister ^= 0b000000100000
+	updateRegister(g, "switch-register", int16(switchRegister))
+	return nil
+}
+func switchRegister8(g *gocui.Gui, v *gocui.View) error {
+	switchRegister ^= 0b000000010000
+	updateRegister(g, "switch-register", int16(switchRegister))
+	return nil
+}
+func switchRegister9(g *gocui.Gui, v *gocui.View) error {
+	switchRegister ^= 0b000000001000
+	updateRegister(g, "switch-register", int16(switchRegister))
+	return nil
+}
+func switchRegister10(g *gocui.Gui, v *gocui.View) error {
+	switchRegister ^= 0b000000000100
+	updateRegister(g, "switch-register", int16(switchRegister))
+	return nil
+}
+func switchRegister11(g *gocui.Gui, v *gocui.View) error {
+	switchRegister ^= 0b000000000010
+	updateRegister(g, "switch-register", int16(switchRegister))
+	return nil
+}
+func switchRegister12(g *gocui.Gui, v *gocui.View) error {
+	switchRegister ^= 0b000000000001
+	updateRegister(g, "switch-register", int16(switchRegister))
 	return nil
 }
 
