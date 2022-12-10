@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"io"
 	"os"
 	"strconv"
 )
@@ -73,6 +74,61 @@ func LoadPObjFile(filename string) (mem [4096]int16, err error) {
 			mem[addr] = int16(data)
 			addr++
 		}
+	}
+
+	return
+}
+
+// Load a binary file in RIM format. These are produced by mkasm, but
+// the RIM format was originally used for paper tapes for the PDP-8.
+func LoadRIMFile(filename string) (mem [4096]int16, err error) {
+
+	// Open file and create a new reader
+	rimFile, err := os.Open(filename)
+	if err != nil {
+		panic("couldn't open file")
+	}
+	defer rimFile.Close()
+
+	rimReader := bufio.NewReader(rimFile)
+
+	// Skip over leading `0o200` bytes
+	for b, _ := rimReader.Peek(1); b[0] == 0o200; b, _ = rimReader.Peek(1) {
+		_, err := rimReader.Discard(1)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	// Loop until EOF or trailing `0o200` bytes
+	for {
+		block := make([]byte, 4)
+		read, err := rimReader.Read(block)
+		if read != len(block) && read > 0 { // Sometimes err == EOF and read != 0
+			if block[0] != 0o200 {
+				panic("Incorrect format")
+			}
+		}
+		if err != nil {
+			if err == io.EOF {
+				break
+			} else {
+				panic(err)
+			}
+		}
+
+		var addr, data int16
+		if b := block[0]; b == 0o200 { // Trailer bytes, break from loop
+			break
+		} else if b>>6&1 == 1 {
+			// Start of address byte, this means the format is correct-ish
+			addr = (int16(block[0]&0o77) << 6) | int16(block[1]&0o77)
+			data = (int16(block[2]&0o77) << 6) | int16(block[3]&0o77)
+		} else {
+			panic("Incorrect format")
+		}
+
+		mem[addr] = data
 	}
 
 	return

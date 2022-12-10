@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path"
 	"time"
 )
 
@@ -109,12 +110,12 @@ func (mk *MK12) halt() {
 	}
 
 	// Listen for keyboard inputs
-	if !mk.STATE.SSTEP {
-		// debugPrint(mk.g, "** SYSTEM HALTED **  [ENTER] CONTINUE  |  [CTRL] + [C] EXIT  |  [SPACE] SINGLE STEP")
-		// updateStatus(mk.g, "HALT", gocui.AttrBold|gocui.ColorRed)
-	} else {
-		// updateStatus(mk.g, "STEP", gocui.AttrBold|gocui.ColorBlue)
-	}
+	// if !mk.STATE.SSTEP {
+	// debugPrint(mk.g, "** SYSTEM HALTED **  [ENTER] CONTINUE  |  [CTRL] + [C] EXIT  |  [SPACE] SINGLE STEP")
+	// updateStatus(mk.g, "HALT", gocui.AttrBold|gocui.ColorRed)
+	// } else {
+	// updateStatus(mk.g, "STEP", gocui.AttrBold|gocui.ColorBlue)
+	// }
 
 	for mk.STATE.HALT {
 		c := getLastKey()
@@ -477,8 +478,17 @@ func main() {
 		myMK12.IOT = append(myMK12.IOT, &teleType)
 	}
 
-	// Load our compiled object file into memory
-	m, err := LoadPObjFile(args.InFile)
+	// Load our compiled object file, basing the format off the extension
+	var m [4096]int16
+	var err error
+	switch path.Ext(args.InFile) {
+	case ".rim":
+		m, err = LoadRIMFile(args.InFile)
+	case ".po":
+		fallthrough
+	default:
+		m, err = LoadPObjFile(args.InFile)
+	}
 	if err != nil {
 		panic(err)
 	}

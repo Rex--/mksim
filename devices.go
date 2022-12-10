@@ -91,9 +91,10 @@ func (tt *TeleTypeDevice) Iop2() (skip bool, clr bool, or bool) {
 	if tt.dev == TT_KEYBOARD { // KCC
 		// Clear internal indicator of character ready (will be done when we read the byte)
 		clr = true // Signal to clear AC in preparation of data exchange
-	} else if tt.dev == TT_PRINTER {
-		// Clear internal indication of printer ready
 	}
+	// } else if tt.dev == TT_PRINTER {
+	// 	// Clear internal indication of printer ready
+	// }
 	return skip, clr, or
 }
 
