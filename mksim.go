@@ -1,12 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
-	"log"
 	"os"
 	"time"
-
-	"github.com/jroimartin/gocui"
 )
 
 // Instructions
@@ -37,6 +35,14 @@ const (
 	AUTO_end   = 0o17
 )
 
+// The Front Panel relays information back to the user about the runtime status
+type FrontPanel interface {
+	PowerOn(mk MK12)          // Called on start with a mostly-default mk-12
+	PowerOff()                // Called on shutdown
+	Update(mk MK12)           // Update the register bulbs/display
+	ReadSwitches() (sr int16) // Read the front panel switches
+}
+
 // This structure contains the various components of a theoretical MK-12
 // All registers are stored as int16 but have a valid range of -/+4096 (12-bit signed int)
 type MK12 struct {
@@ -45,6 +51,9 @@ type MK12 struct {
 
 	// Instruction register
 	IR int16
+
+	// Decoded instruction register
+	IRd string
 
 	// Accumulator Register
 	AC int16
@@ -78,14 +87,11 @@ type MK12 struct {
 		EXIT bool
 	}
 
-	// The IOT struct holds IO devices
-	IOT struct {
-		// Teleprinter flag
-		PRINTER bool
-	}
+	// IOT is an array of IOT devices.
+	IOT []Device
 
-	// Gui attached to this computer
-	g *gocui.Gui
+	// Front panel attached to this computer
+	fp FrontPanel
 
 	// The HW struct contains information about the simulated hardware
 	HW struct {
@@ -98,21 +104,21 @@ type MK12 struct {
 func (mk *MK12) halt() {
 	// If EXIT flag is set, we exit upon a halt
 	if mk.STATE.EXIT {
-		mk.g.Close()
+		mk.fp.PowerOff()
 		os.Exit(0)
 	}
 
 	// Listen for keyboard inputs
 	if !mk.STATE.SSTEP {
-		debugPrint(mk.g, "** SYSTEM HALTED **  [ENTER] CONTINUE  |  [CTRL] + [C] EXIT  |  [SPACE] SINGLE STEP")
-		updateStatus(mk.g, "HALT", gocui.AttrBold|gocui.ColorRed)
+		// debugPrint(mk.g, "** SYSTEM HALTED **  [ENTER] CONTINUE  |  [CTRL] + [C] EXIT  |  [SPACE] SINGLE STEP")
+		// updateStatus(mk.g, "HALT", gocui.AttrBold|gocui.ColorRed)
 	} else {
-		updateStatus(mk.g, "STEP", gocui.AttrBold|gocui.ColorBlue)
+		// updateStatus(mk.g, "STEP", gocui.AttrBold|gocui.ColorBlue)
 	}
 
 	for mk.STATE.HALT {
 		c := getLastKey()
-		switch *c {
+		switch c {
 		case '\n':
 			// debugPrint(mk.g, "Detected [ENTER]")
 			mk.STATE.SSTEP = false
@@ -126,7 +132,7 @@ func (mk *MK12) halt() {
 		case 0: // No keypress
 
 		default:
-			debugPrint(mk.g, fmt.Sprintf("UNKNOWN\t'%c'", *c))
+			// debugPrint(mk.g, fmt.Sprintf("UNKNOWN\t'%c'", *c))
 		}
 	}
 }
@@ -142,7 +148,7 @@ func (mk *MK12) halt() {
 func (mk *MK12) fetch() {
 
 	// Check if step button pressed
-	if c := getLastKey(); *c == ' ' {
+	if c := getLastKey(); c == ' ' {
 		mk.STATE.SSTEP = true
 	}
 
@@ -157,7 +163,7 @@ func (mk *MK12) fetch() {
 	}
 
 	// Update to RUN status after returning from HALT or STEP
-	updateStatus(mk.g, "RUN", gocui.AttrBold|gocui.ColorGreen)
+	// updateStatus(mk.g, "RUN", gocui.AttrBold|gocui.ColorGreen)
 
 	// Load PC into MA to get next instruction,
 	// Save PC into MB for later use (indirect addressing)
@@ -169,6 +175,7 @@ func (mk *MK12) fetch() {
 
 	// Load instruction register
 	mk.IR = mk.MEM[mk.MA]
+	mk.IRd = ""
 
 	// Shorthand variable for the current instruction operator
 	inOpr := mk.IR >> 9
@@ -215,11 +222,11 @@ func (mk *MK12) execute() {
 	case AND:
 		// AND data with AC and store it back in AC
 		tAC := mk.AC & mk.MB
-		debugPrint(mk.g, fmt.Sprintf("AND %o & %o = %o --> AC", mk.AC, mk.MB, tAC))
+		mk.IRd = fmt.Sprintf("AND %o & %o = %o --> AC", mk.AC, mk.MB, tAC)
 		mk.AC = tAC
 	case TAD:
 		tAC, c := MKadd(mk.AC, mk.MB)
-		debugPrint(mk.g, fmt.Sprintf("TAD %d + %d = %d --> AC", mk.AC, mk.MB, tAC))
+		mk.IRd = fmt.Sprintf("TAD %d + %d = %d --> AC", mk.AC, mk.MB, tAC)
 		mk.L = c
 		mk.AC = tAC
 	case ISZ:
@@ -228,73 +235,80 @@ func (mk *MK12) execute() {
 		mk.MEM[mk.MA] = mk.MB
 		// If MB is zero, skip next instruction
 		if mk.MB == 0 {
-			debugPrint(mk.g, fmt.Sprintf("ISZ %o + 1 = %o --> %o; SKP %o", mk.MB-1, mk.MB, mk.MA, mk.PC))
+			mk.IRd = fmt.Sprintf("ISZ %o + 1 = %o --> %o; SKP %o", mk.MB-1, mk.MB, mk.MA, mk.PC)
 			mk.PC = mk.PC + 1
 		} else {
-			debugPrint(mk.g, fmt.Sprintf("ISZ %o + 1 = %o --> %o", mk.MB-1, mk.MB, mk.MA))
+			mk.IRd = fmt.Sprintf("ISZ %o + 1 = %o --> %o", mk.MB-1, mk.MB, mk.MA)
 		}
 	case DCA:
 		mk.MB = mk.AC
 		mk.MEM[mk.MA] = mk.MB
 		mk.AC = 0
-		debugPrint(mk.g, fmt.Sprintf("DCA %o --> %o ; 0 --> AC", mk.MB, mk.MA))
+		mk.IRd = fmt.Sprintf("DCA %o --> %o ; 0 --> AC", mk.MB, mk.MA)
 	case JMS:
 		mk.MEM[mk.MA] = mk.PC
-		debugPrint(mk.g, fmt.Sprintf("JMS %o ; RET %o", mk.MA, mk.PC))
+		mk.IRd = fmt.Sprintf("JMS %o ; RET %o", mk.MA, mk.PC)
 		mk.PC = mk.MA + 1
 	case JMP:
 		// Jump to the address stored in MA by storing it in the PC
 		mk.PC = mk.MA
-		debugPrint(mk.g, fmt.Sprintf("JMP %o", mk.MA))
+		mk.IRd = fmt.Sprintf("JMP %o", mk.MA)
 	case IOT:
 		devAddr := (mk.IR >> 3) & 0o77
-		devReq := mk.IR & 0o7
+		op1 := mk.IR & 0b001
+		op2 := (mk.IR & 0b010) >> 1
+		op4 := (mk.IR & 0b100) >> 2
 
-		var debugInst string
-		switch devAddr {
-		case 4: // Teletype teleprinter/punch (stdout)
-			debugInst += "IOT TELEPRINTER "
-			if devReq == 1 { // Skip if flag is true
-				debugInst += "SKIP"
-				if mk.IOT.PRINTER {
-					mk.PC = mk.PC + 1
-					debugInst += "(T) "
-				} else {
-					debugInst += "(F) "
+		for _, dev := range mk.IOT {
+			if dev.Select(devAddr, mk) {
+				// IOP1
+				if op1 == 1 {
+					skip, clr, or := dev.Iop1()
+					if skip {
+						mk.PC += 1 // Skip next instruction
+					}
+					if clr {
+						mk.AC = 0 // Clear AC
+					}
+					if or {
+						mk.AC |= dev.Get() // OR AC with device input
+					}
 				}
+				// IOP2
+				if op2 == 1 {
+					skip, clr, or := dev.Iop2()
+					if skip {
+						mk.PC += 1 // Skip next instruction
+					}
+					if clr {
+						mk.AC = 0 // Clear AC
+					}
+					if or {
+						mk.AC |= dev.Get() // OR AC with device input
+					}
+				}
+				// IOP4
+				if op4 == 1 {
+					skip, clr, or := dev.Iop4()
+					if skip {
+						mk.PC += 1 // Skip next instruction
+					}
+					if clr {
+						mk.AC = 0 // Clear AC
+					}
+					if or {
+						mk.AC |= dev.Get() // OR AC with device input
+					}
+				}
+				break
 			}
-			if devReq == 2 { // Clear flag
-				mk.IOT.PRINTER = false
-				debugInst += "CLF "
-			}
-			if devReq == 4 { // Load char from AC and print it
-				consolePrint(mk.g, fmt.Sprintf("%c", mk.AC))
-				mk.IOT.PRINTER = true
-				debugInst += "PRINT"
-			}
-
-			if devReq == 6 { // Combo of the two above: print char and clear flag
-				mk.IOT.PRINTER = false
-				consolePrint(mk.g, fmt.Sprintf("%c", mk.AC))
-				mk.IOT.PRINTER = true
-				debugInst += "PRINT CLF"
-			}
-		default:
-			panic("IOT device not implemented")
-		}
-
-		if debugInst != "" {
-			debugPrint(mk.g, debugInst)
 		}
 
 	case OPR:
-		// if mk.IR == 0o7402 {
-		// 	mk.STATE.HALT = true
-		// 	fmt.Println("HALT")
-		// }
-		// if mk.IR == 0o7000 {
-		// 	time.Sleep(time.Millisecond)
-		// }
+		// We wait a millisecond for a NOP instruction.
+		if mk.IR == 0o7000 {
+			time.Sleep(time.Millisecond)
+		}
 
 		group := (mk.IR >> 8) & 1
 		if group > 0 {
@@ -342,9 +356,7 @@ func (mk *MK12) execute() {
 				panic("rotate not implemented")
 			}
 
-			if debugInst != "" {
-				debugPrint(mk.g, debugInst)
-			}
+			mk.IRd = debugInst
 
 		case OPR_GROUP_2:
 			var debugInst string = "OPR "
@@ -399,9 +411,7 @@ func (mk *MK12) execute() {
 				mk.STATE.HALT = true
 			}
 
-			if debugInst != "" {
-				debugPrint(mk.g, debugInst)
-			}
+			mk.IRd = debugInst
 
 		case OPR_GROUP_3:
 			panic("group 3 operate instructions not implemented")
@@ -414,28 +424,21 @@ func (mk *MK12) execute() {
 
 func (mk *MK12) run() {
 	// Init the registers with some default value because we get stuck in the first fetch halt loop
-	updateRegister(mk.g, "accumulator-register", mk.AC)
-	updateRegister(mk.g, "counter-register", mk.PC)
-	updateRegister(mk.g, "instruction-register", mk.IR)
-	updateRegister(mk.g, "address-register", mk.MA)
-	updateRegister(mk.g, "buffer-register", mk.MB)
-	updateRegister(mk.g, "switch-register", mk.SR)
+	mk.fp.Update(*mk)
 	// Loop forever
 	for {
 		mk.fetch()
 		// Update SR after we fetch because we might be returning from a HALT, so
 		// the switches might have changed. Update it before execute for same reason
-		mk.SR = int16(switchRegister)
+		mk.SR = mk.fp.ReadSwitches()
 
 		mk.execute()
 
-		updateRegister(mk.g, "accumulator-register", mk.AC)
-		updateRegister(mk.g, "counter-register", mk.PC)
-		updateRegister(mk.g, "instruction-register", mk.IR)
-		updateRegister(mk.g, "address-register", mk.MA)
-		updateRegister(mk.g, "buffer-register", mk.MB)
+		mk.fp.Update(*mk)
 
-		time.Sleep(10 * time.Millisecond)
+		if !mk.STATE.SSTEP {
+			time.Sleep(((time.Duration(mk.HW.F_CPU / 1000000)) * time.Millisecond))
+		}
 	}
 }
 
@@ -443,15 +446,36 @@ func main() {
 	// Parse Arguments
 	args := parseArgs()
 
-	// Create our console user interface for the computer
-	gui := CUI()
-	defer gui.Close()
-
 	// Create a new MK-12 computer and configure needed flags for startup
-	myMK12 := MK12{g: gui}
+	myMK12 := MK12{}
 	myMK12.HW.F_CPU = args.F_CPU
 	myMK12.STATE.HALT = args.HALT
 	myMK12.STATE.EXIT = args.EXIT
+
+	// Create our front panel
+	if args.NoGui {
+		myMK12.fp = new(CLIFrontPanel)
+		myMK12.fp.PowerOn(myMK12)
+		// Setup IOT Teleprinter to stdin/stdout
+		keyboard := bufio.NewReader(os.Stdin)
+		printer := bufio.NewWriter(os.Stdout)
+		teleType := TeleTypeDevice{
+			Keyboard: keyboard,
+			Printer:  printer,
+		}
+		myMK12.IOT = append(myMK12.IOT, &teleType)
+	} else {
+		cfp := new(CUIFrontPanel)
+		myMK12.fp = cfp
+		// Power up the front panel
+		myMK12.fp.PowerOn(myMK12)
+		ctele := CursedTeletype{g: cfp.g}
+		teleType := TeleTypeDevice{
+			Keyboard: &ctele,
+			Printer:  &ctele,
+		}
+		myMK12.IOT = append(myMK12.IOT, &teleType)
+	}
 
 	// Load our compiled object file into memory
 	m, err := LoadPObjFile(args.InFile)
@@ -462,10 +486,5 @@ func main() {
 
 	// Set PC to RESET vector and start computer
 	myMK12.PC = 0o200
-	go myMK12.run()
-
-	// CUI Loop
-	if err := gui.MainLoop(); err != nil && err != gocui.ErrQuit {
-		log.Panicln(err)
-	}
+	myMK12.run()
 }

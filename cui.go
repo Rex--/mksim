@@ -3,22 +3,30 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/jroimartin/gocui"
 )
 
-var lastKey rune
+var lastKey byte
 var switchRegister int
 
-func CUI() *gocui.Gui {
+type CUIFrontPanel struct {
+	g *gocui.Gui
+}
+
+func (fp *CUIFrontPanel) PowerOn(mk MK12) {
+	// Initialize Console interface on powerup and save it
 	g, err := gocui.NewGui(gocui.OutputNormal)
 	if err != nil {
 		log.Panicln(err)
 	}
-	// defer g.Close()
+	fp.g = g
 
+	// Layout
 	g.SetManagerFunc(layout)
 
+	// Keybindings
 	if err := g.SetKeybinding("", gocui.KeyCtrlC, gocui.ModNone, quit); err != nil {
 		log.Panicln(err)
 	}
@@ -31,6 +39,7 @@ func CUI() *gocui.Gui {
 		log.Panicln(err)
 	}
 
+	// F1-F12 Keys for Switch register
 	if err := g.SetKeybinding("", gocui.KeyF1, gocui.ModNone, switchRegister1); err != nil {
 		log.Panicln(err)
 	}
@@ -68,11 +77,39 @@ func CUI() *gocui.Gui {
 		log.Panicln(err)
 	}
 
-	// if err := g.MainLoop(); err != nil && err != gocui.ErrQuit {
-	// 	log.Panicln(err)
-	// }
+	// Start CUI loop
+	go g.MainLoop()
+}
 
-	return g
+func (fp *CUIFrontPanel) PowerOff() {
+	fp.g.Close()
+}
+
+func (fp *CUIFrontPanel) Update(mk MK12) {
+	var status string
+	var attr = gocui.AttrBold
+	if mk.STATE.HALT {
+		status = "HALT"
+		attr |= gocui.ColorRed
+	} else if mk.STATE.SSTEP {
+		status = "STEP"
+		attr |= gocui.ColorBlue
+	} else {
+		status = "RUN"
+		attr |= gocui.ColorGreen
+	}
+	updateStatus(fp.g, status, attr)
+	updateRegister(fp.g, "accumulator-register", mk.AC)
+	updateRegister(fp.g, "counter-register", mk.PC)
+	updateRegister(fp.g, "instruction-register", mk.IR)
+	updateRegister(fp.g, "address-register", mk.MA)
+	updateRegister(fp.g, "buffer-register", mk.MB)
+	updateRegister(fp.g, "switch-register", mk.SR)
+	debugPrint(fp.g, mk.IRd)
+}
+
+func (fp *CUIFrontPanel) ReadSwitches() int16 {
+	return int16(switchRegister)
 }
 
 func layout(g *gocui.Gui) error {
@@ -119,7 +156,6 @@ func layout(g *gocui.Gui) error {
 			return err
 		}
 		v.Title = " PC "
-		// fmt.Fprintln(v, " 000000000000")
 	}
 	regHStart = regHEnd + 1
 	regHEnd = regHStart + regHeight
@@ -129,7 +165,6 @@ func layout(g *gocui.Gui) error {
 			return err
 		}
 		v.Title = " IR "
-		// fmt.Fprintln(v, " 000000000000")
 	}
 	regHStart = regHEnd + 1
 	regHEnd = regHStart + regHeight
@@ -139,7 +174,6 @@ func layout(g *gocui.Gui) error {
 			return err
 		}
 		v.Title = " AC "
-		// fmt.Fprintln(v, " 000000000000")
 	}
 	regHStart = regHEnd + 1
 	regHEnd = regHStart + regHeight
@@ -149,7 +183,6 @@ func layout(g *gocui.Gui) error {
 			return err
 		}
 		v.Title = " MA "
-		// fmt.Fprintln(v, " 000000000000")
 	}
 	regHStart = regHEnd + 1
 	regHEnd = regHStart + regHeight
@@ -159,7 +192,6 @@ func layout(g *gocui.Gui) error {
 			return err
 		}
 		v.Title = " MB "
-		// fmt.Fprintln(v, " 000000000000")
 	}
 	regHStart = regHEnd + 1
 	regHEnd = regHStart + regHeight
@@ -169,7 +201,6 @@ func layout(g *gocui.Gui) error {
 			return err
 		}
 		v.Title = " SR "
-		// fmt.Fprintln(v, " 000000000000")
 	}
 
 	// Teletype printer + keyboard
@@ -180,10 +211,6 @@ func layout(g *gocui.Gui) error {
 		v.Title = " CONSOLE "
 		v.Wrap = true
 		v.Autoscroll = true
-		// v.SelBgColor = gocui.ColorCyan
-		// v.Highlight = true
-		// fmt.Fprintln(v, "000000000000")
-		// fmt.Fprintln(v, " Really long line.Really long line. Really long line. Really long line.Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line.Really long line.Really long line.Really long line.Really long line.Really long line.Really long line. Really long line. Really long line. Really long line. Really long line. Really long line. Really long line.Really long line. Really long line.")
 	}
 
 	// Debug command console
@@ -193,7 +220,6 @@ func layout(g *gocui.Gui) error {
 		}
 		v.Title = " DEBUG "
 		v.Autoscroll = true
-		// fmt.Fprintf(v, "Hello, world!")
 	}
 
 	// Program Title Text
@@ -202,7 +228,7 @@ func layout(g *gocui.Gui) error {
 			return err
 		}
 		v.FgColor = gocui.AttrBold
-		s := "MKSIM v0.0"
+		s := "MKSIM"
 		centerd := fmt.Sprintf("%*s", -regWidth, fmt.Sprintf("%*s", (regWidth+len(s))/2, s))
 		fmt.Fprint(v, centerd)
 	}
@@ -212,14 +238,14 @@ func layout(g *gocui.Gui) error {
 			return err
 		}
 		v.FgColor = gocui.AttrBold
-		// centerd := fmt.Sprintf("%*s", -regWidth, fmt.Sprintf("%*s", (regWidth+len(s))/2, s))
-		// fmt.Fprint(v, centerd)
 	}
 
 	return nil
 }
 
 func quit(g *gocui.Gui, v *gocui.View) error {
+	g.Close()
+	os.Exit(0)
 	return gocui.ErrQuit
 }
 
@@ -294,16 +320,16 @@ func switchRegister12(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
-var k rune
+var b byte
 
-func getLastKey() *rune {
+func getLastKey() byte {
 	if lastKey != 0 {
-		k = lastKey
+		b = lastKey
 		lastKey = 0
 	} else {
-		k = 0
+		b = 0
 	}
-	return &k
+	return b
 }
 
 func updateRegister(g *gocui.Gui, registerName string, registerVal int16) {
@@ -315,17 +341,6 @@ func updateRegister(g *gocui.Gui, registerName string, registerVal int16) {
 		v.Clear()
 		uVal := uint16(registerVal)
 		fmt.Fprintf(v, " %.12b ", uVal)
-		return nil
-	})
-}
-
-func consolePrint(g *gocui.Gui, msg string) {
-	g.Update(func(g *gocui.Gui) error {
-		v, err := g.View("teletype")
-		if err != nil {
-			return err
-		}
-		fmt.Fprint(v, msg)
 		return nil
 	})
 }
@@ -354,4 +369,41 @@ func updateStatus(g *gocui.Gui, status string, atr gocui.Attribute) {
 		fmt.Fprint(v, centerd)
 		return nil
 	})
+}
+
+type CursedTeletype struct {
+	g *gocui.Gui
+}
+
+// Printer
+func (p *CursedTeletype) WriteByte(c byte) error {
+	p.g.Update(func(g *gocui.Gui) error {
+		v, err := g.View("teletype")
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(v, "%c", c)
+		return nil
+	})
+	return nil
+}
+
+func (ct *CursedTeletype) Flush() error {
+	return nil
+}
+
+func (ct *CursedTeletype) Available() int {
+	return 1
+}
+
+// Keyboard
+func (ct *CursedTeletype) ReadByte() (byte, error) {
+	return getLastKey(), nil
+}
+
+func (ct *CursedTeletype) Buffered() int {
+	if lastKey != 0 {
+		return 1
+	}
+	return 0
 }

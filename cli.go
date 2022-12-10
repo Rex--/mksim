@@ -9,6 +9,8 @@ type CLIArgs struct {
 	ProgName string
 	InFile   string
 
+	NoGui bool
+
 	// HALT on startup
 	HALT bool
 	// Exit on HALT
@@ -31,6 +33,8 @@ func parseArgs() CLIArgs {
 	flag.BoolVar(&args.HALT, "halt", false, "HALT the machine before first instruction cycle")
 	flag.BoolVar(&args.EXIT, "exit", false, "Exit the simulator on HALT")
 
+	flag.BoolVar(&args.NoGui, "no-gui", false, "Do not display curses ui")
+
 	// Parse
 	flag.Parse()
 
@@ -43,4 +47,23 @@ func parseArgs() CLIArgs {
 	}
 
 	return args
+}
+
+type CLIFrontPanel struct {
+}
+
+func (fp *CLIFrontPanel) PowerOn(mk MK12) {
+
+}
+
+func (fp *CLIFrontPanel) PowerOff() {
+
+}
+
+func (fp *CLIFrontPanel) Update(mk MK12) {
+
+}
+
+func (fp *CLIFrontPanel) ReadSwitches() int16 {
+	return 0
 }
