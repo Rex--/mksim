@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 )
 
@@ -20,23 +21,37 @@ type CLIArgs struct {
 	F_CPU int64
 }
 
+func printUsage() {
+	fmt.Println("Usage:", os.Args[0], "[options] <in_file>")
+	fmt.Printf("\nOptions:\n")
+	flag.PrintDefaults()
+}
+
 func parseArgs() CLIArgs {
 
 	args := CLIArgs{}
 
-	// Set program name
+	// Set program name and usage print function
 	args.ProgName = os.Args[0]
+	flag.Usage = printUsage
 
 	// Add flags
-	flag.Int64Var(&args.F_CPU, "F_CPU", 8000000, "simulated clock speed in Hz")
+	flag.Int64Var(&args.F_CPU, "F_CPU", 8000000, "simulated clock `speed`")
 
 	flag.BoolVar(&args.HALT, "halt", false, "HALT the machine before first instruction cycle")
 	flag.BoolVar(&args.EXIT, "exit", false, "Exit the simulator on HALT")
 
 	flag.BoolVar(&args.NoGui, "no-gui", false, "Do not display curses ui")
 
+	help := flag.Bool("help", false, "Print this message and exit")
+
 	// Parse
 	flag.Parse()
+
+	if *help {
+		flag.Usage()
+		os.Exit(0)
+	}
 
 	// Get remaining positional argument (infile)
 	if len(flag.Args()) == 1 {
