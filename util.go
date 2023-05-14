@@ -36,11 +36,33 @@ func MKcomplement(a int16) (x int16) {
 	// Detect signed int and convert it to negative
 	if ((x >> 11) & 1) == 1 {
 		// Keep bottom 11 bits
-		x = x & 0b11111111111
+		x &= 0b011111111111
 		// Set top bit to 1 (Convert to negative number)
-		x = x * -1
+		x |= 0b100000000000
 	}
 
+	return
+}
+
+func MKrotateRight(a int16, l bool) (x int16, y bool) {
+	if a&1 == 1 {
+		y = true
+	}
+	x = a >> 1
+	if l {
+		x |= 0b100000000000
+	}
+	return
+}
+
+func MKrotateLeft(a int16, l bool) (x int16, y bool) {
+	if a&0b100000000000 == 1 {
+		y = true
+	}
+	x = (a << 1) & 0b111111111111
+	if l {
+		x |= 0b1
+	}
 	return
 }
 
@@ -62,7 +84,7 @@ func LoadPObjFile(filename string) (mem [4096]int16, err error) {
 	var addr uint64 = 0
 	var data uint64
 	for scanner.Scan() {
-		data, err = strconv.ParseUint(scanner.Text(), 8, 17)
+		data, err = strconv.ParseUint(scanner.Text(), 8, 16)
 		if err != nil {
 			return
 		}

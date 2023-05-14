@@ -172,7 +172,7 @@ func (mk *MK12) fetch() {
 	mk.MB = mk.PC
 
 	// Increment PC to point to the next instruction to execute
-	mk.PC, _ = MKadd(mk.PC, 1)
+	mk.PC = (mk.PC + 1) % 4096
 
 	// Load instruction register
 	mk.IR = mk.MEM[mk.MA]
@@ -185,7 +185,7 @@ func (mk *MK12) fetch() {
 		var addr int16
 		if (mk.IR & 0b0000000010000000) > 0 {
 			// If page bit is set, we use the current page
-			addr = mk.PC & 0b0000111110000000
+			addr = mk.MB & 0b0000111110000000
 		} else {
 			// If bit is not set, we use the first page
 			addr = 0
@@ -225,11 +225,13 @@ func (mk *MK12) execute() {
 		tAC := mk.AC & mk.MB
 		mk.IRd = fmt.Sprintf("AND %o & %o = %o --> AC", mk.AC, mk.MB, tAC)
 		mk.AC = tAC
+
 	case TAD:
 		tAC, c := MKadd(mk.AC, mk.MB)
 		mk.IRd = fmt.Sprintf("TAD %d + %d = %d --> AC", mk.AC, mk.MB, tAC)
 		mk.L = c
 		mk.AC = tAC
+
 	case ISZ:
 		// Increment MB and store it in MEM
 		mk.MB, _ = MKadd(mk.MB, 1)
@@ -241,24 +243,29 @@ func (mk *MK12) execute() {
 		} else {
 			mk.IRd = fmt.Sprintf("ISZ %o + 1 = %o --> %o", mk.MB-1, mk.MB, mk.MA)
 		}
+
 	case DCA:
 		mk.MB = mk.AC
 		mk.MEM[mk.MA] = mk.MB
 		mk.AC = 0
 		mk.IRd = fmt.Sprintf("DCA %o --> %o ; 0 --> AC", mk.MB, mk.MA)
+
 	case JMS:
 		mk.MEM[mk.MA] = mk.PC
 		mk.IRd = fmt.Sprintf("JMS %o ; RET %o", mk.MA, mk.PC)
 		mk.PC = mk.MA + 1
+
 	case JMP:
 		// Jump to the address stored in MA by storing it in the PC
 		mk.PC = mk.MA
 		mk.IRd = fmt.Sprintf("JMP %o", mk.MA)
+
 	case IOT:
 		devAddr := (mk.IR >> 3) & 0o77
 		op1 := mk.IR & 0b001
 		op2 := (mk.IR & 0b010) >> 1
 		op4 := (mk.IR & 0b100) >> 2
+		mk.IRd = fmt.Sprintf("IOT %.3o %.3b", devAddr, op1|op2|op4)
 
 		for _, dev := range mk.IOT {
 			if dev.Select(devAddr, mk) {
@@ -344,17 +351,28 @@ func (mk *MK12) execute() {
 
 			if ((mk.IR) & 1) == 1 { // IAC - Increment Accumulator
 				mk.AC, mk.L = MKadd(mk.AC, 1)
-				debugInst += "IAC"
+				debugInst += "IAC "
 			}
 
-			if ((mk.IR >> 3) & 1) == 1 { // RAR
-				panic("rotate right not implemented")
-			}
-			if ((mk.IR >> 2) & 1) == 1 { // RAL
-				panic("rotate left not implemented")
-			}
 			if ((mk.IR >> 1) & 1) == 1 { // Rotate twice
-				panic("rotate not implemented")
+				if ((mk.IR >> 3) & 1) == 1 { // RTR
+					mk.AC, mk.L = MKrotateRight(mk.AC, mk.L)
+					debugInst += "RTR"
+				}
+				if ((mk.IR >> 2) & 1) == 1 { // RTL
+					mk.AC, mk.L = MKrotateLeft(mk.AC, mk.L)
+					debugInst += "RTL"
+				}
+
+			} else { // Single rotate
+				if ((mk.IR >> 3) & 1) == 1 { // RAR
+					mk.AC, mk.L = MKrotateRight(mk.AC, mk.L)
+					debugInst += "RAR"
+				}
+				if ((mk.IR >> 2) & 1) == 1 { // RAL
+					mk.AC, mk.L = MKrotateLeft(mk.AC, mk.L)
+					debugInst += "RAL"
+				}
 			}
 
 			mk.IRd = debugInst
@@ -432,6 +450,7 @@ func (mk *MK12) run() {
 		// Update SR after we fetch because we might be returning from a HALT, so
 		// the switches might have changed. Update it before execute for same reason
 		mk.SR = mk.fp.ReadSwitches()
+		mk.fp.Update(*mk)
 
 		mk.execute()
 
