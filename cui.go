@@ -339,8 +339,8 @@ func updateRegister(g *gocui.Gui, registerName string, registerVal int16) {
 			return err
 		}
 		v.Clear()
-		uVal := uint16(registerVal)
-		fmt.Fprintf(v, " %.12b ", uVal)
+		uVal := uint16(registerVal) & 0o7777
+		fmt.Fprintf(v, " %12.12b ", uVal)
 		return nil
 	})
 }

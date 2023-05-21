@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"strconv"
 	"time"
 )
 
@@ -105,8 +106,9 @@ type MK12 struct {
 func (mk *MK12) halt() {
 	// If EXIT flag is set, we exit upon a halt
 	if mk.STATE.EXIT {
-		mk.fp.PowerOff()
-		os.Exit(0)
+		// mk.fp.PowerOff()
+		return
+		// os.Exit(int(mk.AC))
 	}
 
 	// Listen for keyboard inputs
@@ -161,6 +163,9 @@ func (mk *MK12) fetch() {
 	// Catch halt
 	if mk.STATE.HALT {
 		mk.halt()
+		if mk.STATE.HALT && mk.STATE.EXIT {
+			return
+		}
 	}
 
 	// Update to RUN status after returning from HALT or STEP
@@ -228,7 +233,7 @@ func (mk *MK12) execute() {
 
 	case TAD:
 		tAC, c := MKadd(mk.AC, mk.MB)
-		mk.IRd = fmt.Sprintf("TAD %d + %d = %d --> AC", mk.AC, mk.MB, tAC)
+		mk.IRd = fmt.Sprintf("TAD %o + %o = %o --> AC", mk.AC, mk.MB, tAC)
 		mk.L = c
 		mk.AC = tAC
 
@@ -388,7 +393,7 @@ func (mk *MK12) execute() {
 			debugInst += "("
 			skip := false
 			if ((mk.IR >> 6) & 1) == 1 { // SMA - Skip on AC < 0
-				if mk.AC < 0 {
+				if mk.AC < 0 || (mk.AC&0o4000) > 0 {
 					skip = true
 				}
 				debugInst += "SMA "
@@ -447,6 +452,10 @@ func (mk *MK12) run() {
 	// Loop forever
 	for {
 		mk.fetch()
+		// Break from loop if we entered an EXIT state during fetch
+		if mk.STATE.HALT && mk.STATE.EXIT {
+			break
+		}
 		// Update SR after we fetch because we might be returning from a HALT, so
 		// the switches might have changed. Update it before execute for same reason
 		mk.SR = mk.fp.ReadSwitches()
@@ -516,4 +525,11 @@ func main() {
 	// Set PC to RESET vector and start computer
 	myMK12.PC = 0o200
 	myMK12.run()
+	myMK12.fp.PowerOff()
+
+	if args.Return {
+		println(strconv.FormatInt(int64(myMK12.AC), 10))
+	}
+
+	os.Exit(int(myMK12.AC))
 }

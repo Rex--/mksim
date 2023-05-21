@@ -12,6 +12,8 @@ type CLIArgs struct {
 
 	NoGui bool
 
+	Return bool // Print AC before exiting
+
 	// HALT on startup
 	HALT bool
 	// Exit on HALT
@@ -42,6 +44,8 @@ func parseArgs() CLIArgs {
 	flag.BoolVar(&args.EXIT, "exit", false, "Exit the simulator on HALT")
 
 	flag.BoolVar(&args.NoGui, "no-gui", false, "Do not display curses ui")
+
+	flag.BoolVar(&args.Return, "print-return", false, "Print return code (AC) upon exiting")
 
 	help := flag.Bool("help", false, "Print this message and exit")
 
