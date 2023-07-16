@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 )
 
 type CLIArgs struct {
@@ -85,4 +86,40 @@ func (fp *CLIFrontPanel) Update(mk MK12) {
 
 func (fp *CLIFrontPanel) ReadSwitches() int16 {
 	return 0
+}
+
+type StdinKeyboard struct {
+	Stdin   *os.File
+	lastKey []byte
+}
+
+func NewStdinKeyboard() (sk StdinKeyboard) {
+	// disable input buffering
+	err := exec.Command("stty", "-F", "/dev/tty", "cbreak", "min", "1").Run()
+	if err != nil {
+		panic(err)
+	}
+	// do not display entered characters on the screen
+	err = exec.Command("stty", "-F", "/dev/tty", "-echo").Run()
+	if err != nil {
+		panic(err)
+	}
+
+	return StdinKeyboard{
+		Stdin:   os.Stdin,
+		lastKey: make([]byte, 1),
+	}
+}
+
+func (sk StdinKeyboard) Buffered() (buffered int) {
+	buffered, err := sk.Stdin.Read(sk.lastKey)
+	if err != nil {
+		panic(err)
+	}
+	return
+}
+
+func (sk StdinKeyboard) ReadByte() (char byte, err error) {
+	char = sk.lastKey[0]
+	return
 }

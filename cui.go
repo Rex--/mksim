@@ -371,12 +371,12 @@ func updateStatus(g *gocui.Gui, status string, atr gocui.Attribute) {
 	})
 }
 
-type CursedTeletype struct {
+type CursedTeleprinter struct {
 	g *gocui.Gui
 }
 
 // Printer
-func (p *CursedTeletype) WriteByte(c byte) error {
+func (p *CursedTeleprinter) WriteByte(c byte) error {
 	p.g.Update(func(g *gocui.Gui) error {
 		v, err := g.View("teletype")
 		if err != nil {
@@ -388,22 +388,10 @@ func (p *CursedTeletype) WriteByte(c byte) error {
 	return nil
 }
 
-func (ct *CursedTeletype) Flush() error {
+func (ct *CursedTeleprinter) Flush() error {
 	return nil
 }
 
-func (ct *CursedTeletype) Available() int {
+func (ct *CursedTeleprinter) Available() int {
 	return 1
-}
-
-// Keyboard
-func (ct *CursedTeletype) ReadByte() (byte, error) {
-	return getLastKey(), nil
-}
-
-func (ct *CursedTeletype) Buffered() int {
-	if lastKey != 0 {
-		return 1
-	}
-	return 0
 }

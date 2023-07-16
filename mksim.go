@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"os/exec"
 	"path"
 	"strconv"
 	"time"
@@ -486,11 +487,9 @@ func main() {
 		myMK12.fp = new(CLIFrontPanel)
 		myMK12.fp.PowerOn(myMK12)
 		// Setup IOT Teleprinter to stdin/stdout
-		keyboard := bufio.NewReader(os.Stdin)
-		printer := bufio.NewWriter(os.Stdout)
 		teleType := TeleTypeDevice{
-			Keyboard: keyboard,
-			Printer:  printer,
+			Keyboard: NewStdinKeyboard(),
+			Printer:  bufio.NewWriter(os.Stdout),
 		}
 		myMK12.IOT = append(myMK12.IOT, &teleType)
 	} else {
@@ -498,9 +497,9 @@ func main() {
 		myMK12.fp = cfp
 		// Power up the front panel
 		myMK12.fp.PowerOn(myMK12)
-		ctele := CursedTeletype{g: cfp.g}
+		ctele := CursedTeleprinter{g: cfp.g}
 		teleType := TeleTypeDevice{
-			Keyboard: &ctele,
+			Keyboard: NewStdinKeyboard(),
 			Printer:  &ctele,
 		}
 		myMK12.IOT = append(myMK12.IOT, &teleType)
@@ -529,6 +528,12 @@ func main() {
 
 	if args.Return {
 		println(strconv.FormatInt(int64(myMK12.AC), 10))
+	}
+
+	// re enable stdin character echoing
+	err = exec.Command("stty", "-F", "/dev/tty", "echo").Run()
+	if err != nil {
+		panic(err)
 	}
 
 	os.Exit(int(myMK12.AC))

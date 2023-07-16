@@ -92,9 +92,6 @@ func (tt *TeleTypeDevice) Iop2() (skip bool, clr bool, or bool) {
 		// Clear internal indicator of character ready (will be done when we read the byte)
 		clr = true // Signal to clear AC in preparation of data exchange
 	}
-	// } else if tt.dev == TT_PRINTER {
-	// 	// Clear internal indication of printer ready
-	// }
 	return skip, clr, or
 }
 
@@ -102,7 +99,7 @@ func (tt *TeleTypeDevice) Iop4() (skip bool, clr bool, or bool) {
 	if tt.dev == TT_KEYBOARD { // KRS - Read keyboard buffer
 		or = true
 	} else if tt.dev == TT_PRINTER { // TPC - Print the contents of AC 4-11
-		tt.Printer.WriteByte(byte(tt.ac))
+		tt.Printer.WriteByte(byte(tt.ac & 0b000011111111))
 		tt.Printer.Flush()
 	}
 	return skip, clr, or
