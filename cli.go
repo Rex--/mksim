@@ -22,6 +22,11 @@ type CLIArgs struct {
 
 	// Clock Speed
 	F_CPU int64
+
+	// File[path] to use as virtual paper tape
+	TapeFile  string
+	iTapeFile string
+	oTapeFile string
 }
 
 func printUsage() {
@@ -48,6 +53,10 @@ func parseArgs() CLIArgs {
 
 	flag.BoolVar(&args.Return, "print-return", false, "Print return code (AC) upon exiting")
 
+	flag.StringVar(&args.TapeFile, "tape", "mk-12.tape", "Specify `path` to file for virtual tape reader/punch")
+	flag.StringVar(&args.iTapeFile, "itape", "", "Specify `path` to file for virtual tape reader")
+	flag.StringVar(&args.oTapeFile, "otape", "", "Specify `path` to file for virtual tape punch")
+
 	help := flag.Bool("help", false, "Print this message and exit")
 
 	// Parse
@@ -56,6 +65,13 @@ func parseArgs() CLIArgs {
 	if *help {
 		flag.Usage()
 		os.Exit(0)
+	}
+
+	if args.iTapeFile == "" {
+		args.iTapeFile = args.TapeFile
+	}
+	if args.oTapeFile == "" {
+		args.oTapeFile = args.TapeFile
 	}
 
 	// Get remaining positional argument (infile)

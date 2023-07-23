@@ -505,6 +505,25 @@ func main() {
 		myMK12.IOT = append(myMK12.IOT, &teleType)
 	}
 
+	// Create our papertape reader/punch
+	infile, er := os.Open(args.iTapeFile)
+	if er != nil {
+		panic(er)
+	}
+	// Append to out file
+	outfile, er := os.OpenFile(args.oTapeFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if er != nil {
+		panic(er)
+	}
+	// Defer closing papertape files
+	defer infile.Close()
+	defer outfile.Close()
+	paperTape := PaperTapeDevice{
+		inTape:  infile,
+		outTape: outfile,
+	}
+	myMK12.IOT = append(myMK12.IOT, &paperTape)
+
 	// Load our compiled object file, basing the format off the extension
 	var m [4096]int16
 	var err error

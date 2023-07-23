@@ -1,5 +1,10 @@
 package main
 
+import (
+	"io"
+	"os"
+)
+
 type Device interface {
 	// Select returns true if addr is addressed to this device, false otherwise.
 	// Th device should get any values it needs from the registers (such as AC).
@@ -20,6 +25,13 @@ type Device interface {
 	Iop4() (skip bool, clr bool, or bool)
 }
 
+const (
+	PT_READER   = 0o01
+	PT_PUNCH    = 0o02
+	TT_KEYBOARD = 0o03
+	TT_PRINTER  = 0o04
+)
+
 /////////////////////
 // TeleType Device
 //
@@ -36,6 +48,7 @@ type TeleTypePrinter interface {
 }
 
 type TeleTypeDevice struct {
+	Device
 	In  int // Last teletype input char  (keyboard)
 	Out int // Last teletype output char (printer)
 
@@ -45,11 +58,6 @@ type TeleTypeDevice struct {
 	ac  int16 // Local copy of AC
 	dev int   // Device currently being interfaced with (Keyboard or printer)
 }
-
-const (
-	TT_KEYBOARD = 0o03
-	TT_PRINTER  = 0o04
-)
 
 func (tt *TeleTypeDevice) Select(addr int16, mk *MK12) bool {
 
@@ -103,4 +111,105 @@ func (tt *TeleTypeDevice) Iop4() (skip bool, clr bool, or bool) {
 		tt.Printer.Flush()
 	}
 	return skip, clr, or
+}
+
+///////////////////////////////////
+// Paper Tape Reader/Punch Device (PC8-E)
+//
+
+type PaperTapeDevice struct {
+	Device
+
+	inTape  *os.File
+	outTape *os.File
+
+	// Read Buffer - Register to hold the character read from the tape
+	RB int16
+	// Reader Flag - Flag to signify if character is available to read
+	RF bool
+
+	// Punch buffer - register to hold the character to punch
+	PB int16
+	// Punch Flag - Denote a punch operation is complete
+	PF bool
+
+	// Device currently being interfaced with
+	dev int
+	// Local copy of AC
+	ac int16
+}
+
+func (pt *PaperTapeDevice) Select(addr int16, mk *MK12) bool {
+	if addr == PT_READER {
+		pt.dev = PT_READER
+		return true
+	} else if addr == PT_PUNCH {
+		pt.dev = PT_PUNCH
+		// Flag starts true
+		pt.PF = true
+		// Save AC for use in PPC instruction
+		pt.ac = mk.AC
+		return true
+	}
+	return false
+}
+
+func (pt *PaperTapeDevice) Get() (data int16) {
+	return pt.RB
+}
+
+func (pt *PaperTapeDevice) Iop1() (skip bool, clr bool, or bool) {
+	if pt.dev == PT_READER {
+		skip = pt.RF
+	}
+	if pt.dev == PT_PUNCH {
+		skip = pt.PF
+	}
+	return
+}
+
+func (pt *PaperTapeDevice) Iop2() (skip bool, clr bool, or bool) {
+	if pt.dev == PT_READER {
+		or = true
+	}
+	if pt.dev == PT_PUNCH {
+		// Clear punch flag
+		pt.PF = false
+		// Clear PB?
+		// pt.PB = 0
+	}
+	return
+}
+
+func (pt *PaperTapeDevice) Iop4() (skip bool, clr bool, or bool) {
+	if pt.dev == PT_READER {
+		// Clear reader flag
+		pt.RF = false
+		// Read character(byte) into RB
+		nextByte := make([]byte, 1)
+		_, err := pt.inTape.Read(nextByte)
+		if err != nil {
+			if err == io.EOF {
+				// End of file
+				pt.RB = 0
+			} else {
+				println("papertape jam")
+				panic(err)
+			}
+		} else {
+			pt.RB = int16(nextByte[0])
+		}
+		// Set reader flag
+		pt.RF = true
+	}
+	if pt.dev == PT_PUNCH {
+		// Punch character
+		_, err := pt.outTape.Write([]byte{byte(pt.ac)})
+		if err != nil {
+			panic(err)
+		}
+		// Set Punch flag
+		pt.PF = true
+	}
+	return
 }
