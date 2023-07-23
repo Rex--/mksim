@@ -3,11 +3,11 @@
 / This program reads a tape and make a copy of it.
 
 *10
-MSGPTR, 0o700-1
+MSGPTR, MSG-1
 
 *200
 MAIN,   CLA CLL
-        TAD I MSGPTR
+        TAD I Z MSGPTR
         SNA
         JMP COPY
         JMS ECHO
@@ -21,8 +21,13 @@ COPY,   JMS GTCHR
         TAD DOT
         JMS ECHO
         JMP MAIN
+DOT,    '.'
 
-EXIT,   HLT
+ECHO,   0
+        TSF             / Skip if teleprinter ready for character
+        JMP .-1         / Else jump back and test again
+        TLS             / Output the character in the AC to the teleprinter
+        JMP I ECHO      / Return from subroutine
 
 PTCHR,  0
         PSF
@@ -38,12 +43,13 @@ GTCHR,  0
         RRB             / Load AC from reader buffer
         JMP I GTCHR     / Return from subroutine
 
-ECHO,   0
-        TSF             / Skip if teleprinter ready for character
-        JMP .-1         / Else jump back and test again
-        TLS             / Output the character in the AC to the teleprinter
-        JMP I ECHO      / Return from subroutine
-*700
+EXIT,   CLA
+        TAD NL
+        JMS ECHO
+        HLT
+        JMP MAIN
+NL,     '\n'
+
 MSG,    'C'
         'o'
         'p'
@@ -57,7 +63,4 @@ MSG,    'C'
         'p'
         'e'
         0
-
-DOT,    '.'
-
 $
