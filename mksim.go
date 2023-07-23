@@ -363,9 +363,11 @@ func (mk *MK12) execute() {
 			if ((mk.IR >> 1) & 1) == 1 { // Rotate twice
 				if ((mk.IR >> 3) & 1) == 1 { // RTR
 					mk.AC, mk.L = MKrotateRight(mk.AC, mk.L)
+					mk.AC, mk.L = MKrotateRight(mk.AC, mk.L)
 					debugInst += "RTR"
 				}
 				if ((mk.IR >> 2) & 1) == 1 { // RTL
+					mk.AC, mk.L = MKrotateLeft(mk.AC, mk.L)
 					mk.AC, mk.L = MKrotateLeft(mk.AC, mk.L)
 					debugInst += "RTL"
 				}
@@ -439,6 +441,7 @@ func (mk *MK12) execute() {
 			mk.IRd = debugInst
 
 		case OPR_GROUP_3:
+			println("instruction:", strconv.Itoa(int(mk.IR)))
 			panic("group 3 operate instructions not implemented")
 		}
 
