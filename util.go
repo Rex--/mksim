@@ -56,7 +56,7 @@ func MKrotateRight(a int16, l bool) (x int16, y bool) {
 }
 
 func MKrotateLeft(a int16, l bool) (x int16, y bool) {
-	if a&0b100000000000 == 1 {
+	if (a>>11)&1 == 1 {
 		y = true
 	}
 	x = (a << 1) & 0b111111111111
