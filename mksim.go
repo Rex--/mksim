@@ -133,6 +133,9 @@ func (mk *MK12) halt() {
 			mk.STATE.SSTEP = true
 			mk.STATE.HALT = false
 
+		case 17: // Device Control 1 Loads the program counter with the switch register
+			mk.PC = mk.SR
+
 		case 0: // No keypress
 
 		default:
@@ -154,7 +157,9 @@ func (mk *MK12) fetch() {
 	// Check if step button pressed
 	if c := getLastKey(); c == ' ' {
 		mk.STATE.SSTEP = true
-	}
+	} // else if c == 17 { // or if home was pressed
+	// 	mk.PC = mk.SR
+	// }
 
 	// Set HALT if single stepping
 	if mk.STATE.SSTEP {
@@ -419,15 +424,16 @@ func (mk *MK12) execute() {
 				// If bit is set, no skip occurs if any condition has been satisfied (skip=true)
 				if !skip {
 					mk.PC = mk.PC + 1
-					debugInst += "SKIP[NOR] "
+					debugInst += "SKIP[NOR]"
 				}
 			} else {
 				// If bit is not set, skip occurs if any condition is satisfied
 				if skip {
-					debugInst += "SKIP[OR] "
+					debugInst += "SKIP[OR]"
 					mk.PC = mk.PC + 1
 				}
 			}
+			debugInst += ")"
 
 			if ((mk.IR >> 2) & 1) == 1 { // OSR - OR switch register with AC
 				mk.AC |= mk.SR
@@ -509,7 +515,7 @@ func main() {
 	}
 
 	// Create our papertape reader/punch
-	infile, er := os.Open(args.iTapeFile)
+	infile, er := os.OpenFile(args.iTapeFile, os.O_CREATE|os.O_RDONLY, 0644)
 	if er != nil {
 		panic(er)
 	}

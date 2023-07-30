@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 )
@@ -130,6 +131,10 @@ func NewStdinKeyboard() (sk StdinKeyboard) {
 func (sk StdinKeyboard) Buffered() (buffered int) {
 	buffered, err := sk.Stdin.Read(sk.lastKey)
 	if err != nil {
+		if err == io.EOF {
+			// sk.Stdin.Seek(0, 0)
+			return 0
+		}
 		panic(err)
 	}
 	return

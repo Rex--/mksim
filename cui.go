@@ -38,6 +38,9 @@ func (fp *CUIFrontPanel) PowerOn(mk MK12) {
 	if err := g.SetKeybinding("", gocui.KeySpace, gocui.ModNone, step); err != nil {
 		log.Panicln(err)
 	}
+	if err := g.SetKeybinding("", gocui.KeyHome, gocui.ModNone, loadPC); err != nil {
+		log.Panicln(err)
+	}
 
 	// F1-F12 Keys for Switch register
 	if err := g.SetKeybinding("", gocui.KeyF1, gocui.ModNone, switchRegister1); err != nil {
@@ -256,6 +259,11 @@ func proceed(g *gocui.Gui, v *gocui.View) error {
 
 func step(g *gocui.Gui, v *gocui.View) error {
 	lastKey = ' '
+	return nil
+}
+
+func loadPC(g *gocui.Gui, v *gocui.View) error {
+	lastKey = 17 // Device Control 1 is Load Program Counter
 	return nil
 }
 
