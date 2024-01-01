@@ -101,7 +101,7 @@ func (fp *CLIFrontPanel) Update(mk MK12) {
 
 }
 
-func (fp *CLIFrontPanel) ReadSwitches() int16 {
+func (fp *CLIFrontPanel) ReadSwitches() uint16 {
 	return 0
 }
 

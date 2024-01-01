@@ -7,44 +7,43 @@ import (
 	"strconv"
 )
 
-// Two complement's add 2 x 12-bit signed integers stored as int16's
-// Returns a 12-bit signed int stored as int16, and a carry flag to signify an overflow has
+// Two complement's add 2 x 12-bit unsigned integers stored as uint16's
+// Returns a 12-bit usigned int stored as uint16, and a carry flag to signify an overflow has
 // occurred.
-func MKadd(a, b int16) (x int16, c bool) {
+func MKadd(a, b uint16) (x uint16, c bool) {
 	c = false
 	x = a + b
 	// Check for 12-bit overflow
-	if (x > 2047) || (x < -2048) {
+	if (x > 4095) {
 		c = true
-		for x > 2047 {
-			x = x - 4096
-		}
-		for x < -2048 {
-			x = x + 4096
-		}
+		x = x - 4096
 	}
 	return x, c
 }
 
-func MKcomplement(a int16) (x int16) {
-	y := uint16(a)
+func MKcomplement(a uint16) (x uint16) {
 
-	for i := 0; i < 12; i++ {
-		x = (int16((1^y>>i)&1) << i) | x
-	}
+	// Complement the last 12 bits
+	x = a ^ 0o7777
 
-	// Detect signed int and convert it to negative
-	if ((x >> 11) & 1) == 1 {
-		// Keep bottom 11 bits
-		x &= 0b011111111111
-		// Set top bit to 1 (Convert to negative number)
-		x |= 0b100000000000
-	}
+	// y := uint16(a)
+
+	// for i := 0; i < 12; i++ {
+	// 	x = (int16((1^a>>i)&1) << i) | x
+	// }
+
+	// // Detect signed int and convert it to negative
+	// if ((x >> 11) & 1) == 1 {
+	// 	// Keep bottom 11 bits
+	// 	x &= 0b011111111111
+	// 	// Set top bit to 1 (Convert to negative number)
+	// 	x |= 0b100000000000
+	// }
 
 	return
 }
 
-func MKrotateRight(a int16, l bool) (x int16, y bool) {
+func MKrotateRight(a uint16, l bool) (x uint16, y bool) {
 	if a&1 == 1 {
 		y = true
 	}
@@ -55,7 +54,7 @@ func MKrotateRight(a int16, l bool) (x int16, y bool) {
 	return
 }
 
-func MKrotateLeft(a int16, l bool) (x int16, y bool) {
+func MKrotateLeft(a uint16, l bool) (x uint16, y bool) {
 	if (a>>11)&1 == 1 {
 		y = true
 	}
@@ -68,32 +67,34 @@ func MKrotateLeft(a int16, l bool) (x int16, y bool) {
 
 // Load an object file produced by pdpnasm.
 // This function returns an array of 4096 int16's representing pdp8 memory
-func LoadPObjFile(filename string) (mem [4096]int16, err error) {
+func LoadPObjFile(filename string) (mem [4096]uint16, err error) {
 
 	err = nil
 
 	// Open file and create new scanner
 	objFile, err := os.Open(filename)
 	if err != nil {
-		return
+		panic(err)
 	}
 	defer objFile.Close()
 	scanner := bufio.NewScanner(objFile)
 
 	// Loop over file line by line
-	var addr uint64 = 0
-	var data uint64
+	var addr uint16 = 0
+	var data uint16
+	var rawData uint64
 	for scanner.Scan() {
-		data, err = strconv.ParseUint(scanner.Text(), 8, 16)
+		rawData, err = strconv.ParseUint(scanner.Text(), 8, 16)
 		if err != nil {
-			return
+			panic(err)
 		}
+		data = uint16(rawData)
 
 		// If the 13th bit is set it's an address
 		if data > 0o7777 {
 			addr = (data & 0o7777)
 		} else {
-			mem[addr] = int16(data)
+			mem[addr] = data
 			addr++
 		}
 	}
@@ -103,7 +104,7 @@ func LoadPObjFile(filename string) (mem [4096]int16, err error) {
 
 // Load a binary file in RIM format. These are produced by mkasm, but
 // the RIM format was originally used for paper tapes for the PDP-8.
-func LoadRIMFile(filename string) (mem [4096]int16, err error) {
+func LoadRIMFile(filename string) (mem [4096]uint16, err error) {
 
 	// Open file and create a new reader
 	rimFile, err := os.Open(filename)
@@ -139,13 +140,13 @@ func LoadRIMFile(filename string) (mem [4096]int16, err error) {
 			}
 		}
 
-		var addr, data int16
+		var addr, data uint16
 		if b := block[0]; b == 0o200 { // Trailer bytes, break from loop
 			break
 		} else if b>>6&1 == 1 {
 			// Start of address byte, this means the format is correct-ish
-			addr = (int16(block[0]&0o77) << 6) | int16(block[1]&0o77)
-			data = (int16(block[2]&0o77) << 6) | int16(block[3]&0o77)
+			addr = (uint16(block[0]&0o77) << 6) | uint16(block[1]&0o77)
+			data = (uint16(block[2]&0o77) << 6) | uint16(block[3]&0o77)
 		} else {
 			panic("Incorrect format")
 		}

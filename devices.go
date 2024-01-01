@@ -8,11 +8,11 @@ import (
 type Device interface {
 	// Select returns true if addr is addressed to this device, false otherwise.
 	// Th device should get any values it needs from the registers (such as AC).
-	Select(addr int16, mk *MK12) bool
+	Select(addr uint16, mk *MK12) bool
 
 	// Get is called to receive 12-bits of input from the device when the ORAC
 	// control signal is asserted.
-	Get() (data int16)
+	Get() (data uint16)
 
 	// The IOT instruction is broken down into three stages, the device should
 	// implement the proper functionality at each stage by returning 3 booleans
@@ -55,11 +55,11 @@ type TeleTypeDevice struct {
 	Keyboard TeleTypeKeyboard
 	Printer  TeleTypePrinter
 
-	ac  int16 // Local copy of AC
-	dev int   // Device currently being interfaced with (Keyboard or printer)
+	ac  uint16 // Local copy of AC
+	dev uint   // Device currently being interfaced with (Keyboard or printer)
 }
 
-func (tt *TeleTypeDevice) Select(addr int16, mk *MK12) bool {
+func (tt *TeleTypeDevice) Select(addr uint16, mk *MK12) bool {
 
 	if addr == TT_KEYBOARD || addr == TT_PRINTER {
 		if addr == TT_PRINTER {
@@ -74,12 +74,12 @@ func (tt *TeleTypeDevice) Select(addr int16, mk *MK12) bool {
 	return false
 }
 
-func (tt *TeleTypeDevice) Get() (data int16) {
+func (tt *TeleTypeDevice) Get() (data uint16) {
 	cData, err := tt.Keyboard.ReadByte()
 	if err != nil {
 		panic("Read error")
 	}
-	return int16(cData)
+	return uint16(cData)
 }
 
 func (tt *TeleTypeDevice) Iop1() (skip bool, clr bool, or bool) {
@@ -124,22 +124,22 @@ type PaperTapeDevice struct {
 	outTape *os.File
 
 	// Read Buffer - Register to hold the character read from the tape
-	RB int16
+	RB uint16
 	// Reader Flag - Flag to signify if character is available to read
 	RF bool
 
 	// Punch buffer - register to hold the character to punch
-	PB int16
+	PB uint16
 	// Punch Flag - Denote a punch operation is complete
 	PF bool
 
 	// Device currently being interfaced with
 	dev int
 	// Local copy of AC
-	ac int16
+	ac uint16
 }
 
-func (pt *PaperTapeDevice) Select(addr int16, mk *MK12) bool {
+func (pt *PaperTapeDevice) Select(addr uint16, mk *MK12) bool {
 	if addr == PT_READER {
 		pt.dev = PT_READER
 		return true
@@ -154,7 +154,7 @@ func (pt *PaperTapeDevice) Select(addr int16, mk *MK12) bool {
 	return false
 }
 
-func (pt *PaperTapeDevice) Get() (data int16) {
+func (pt *PaperTapeDevice) Get() (data uint16) {
 	return pt.RB
 }
 
@@ -197,7 +197,7 @@ func (pt *PaperTapeDevice) Iop4() (skip bool, clr bool, or bool) {
 				panic(err)
 			}
 		} else {
-			pt.RB = int16(nextByte[0])
+			pt.RB = uint16(nextByte[0])
 		}
 		// Set reader flag
 		pt.RF = true

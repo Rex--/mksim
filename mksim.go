@@ -40,43 +40,43 @@ const (
 
 // The Front Panel relays information back to the user about the runtime status
 type FrontPanel interface {
-	PowerOn(mk MK12)          // Called on start with a mostly-default mk-12
-	PowerOff()                // Called on shutdown
-	Update(mk MK12)           // Update the register bulbs/display
-	ReadSwitches() (sr int16) // Read the front panel switches
+	PowerOn(mk MK12)           // Called on start with a mostly-default mk-12
+	PowerOff()                 // Called on shutdown
+	Update(mk MK12)            // Update the register bulbs/display
+	ReadSwitches() (sr uint16) // Read the front panel switches
 }
 
 // This structure contains the various components of a theoretical MK-12
 // All registers are stored as int16 but have a valid range of -/+4096 (12-bit signed int)
 type MK12 struct {
 	// Program Counter
-	PC int16
+	PC uint16
 
 	// Instruction register
-	IR int16
+	IR uint16
 
 	// Decoded instruction register
 	IRd string
 
 	// Accumulator Register
-	AC int16
+	AC uint16
 
 	// Link Flag [1-bit]
 	L bool
 
 	// Memory Address Register
-	MA int16
+	MA uint16
 
 	// Memory Buffer Register
-	MB int16
+	MB uint16
 
 	// Memory [4K x 12 (int16)]
 	// Addresses 0o0 to 0o7777
-	MEM [4096]int16
+	MEM [4096]uint16
 
 	// Switch Register
 	// (unused)
-	SR int16
+	SR uint16
 
 	// The state structure holds the current state of the CPU
 	STATE struct {
@@ -137,9 +137,10 @@ func (mk *MK12) halt() {
 			mk.PC = mk.SR
 
 		case 0: // No keypress
-
+			fallthrough
 		default:
-			// debugPrint(mk.g, fmt.Sprintf("UNKNOWN\t'%c'", *c))
+			// Sleep for a bit - this solves the problem of high cpu usage
+			time.Sleep(time.Millisecond * 1)
 		}
 	}
 }
@@ -193,7 +194,7 @@ func (mk *MK12) fetch() {
 	inOpr := mk.IR >> 9
 	// Load correct address and/or operand for memory reference instructions
 	if inOpr <= JMP {
-		var addr int16
+		var addr uint16
 		if (mk.IR & 0b0000000010000000) > 0 {
 			// If page bit is set, we use the current page
 			addr = mk.MB & 0b0000111110000000
@@ -452,7 +453,7 @@ func (mk *MK12) execute() {
 		}
 
 	default:
-		panic("ope")
+		panic("instruction:" + strconv.Itoa(int(mk.IR)))
 	}
 }
 
@@ -534,7 +535,7 @@ func main() {
 	myMK12.IOT = append(myMK12.IOT, &paperTape)
 
 	// Load our compiled object file, basing the format off the extension
-	var m [4096]int16
+	var m [4096]uint16
 	var err error
 	switch path.Ext(args.InFile) {
 	case ".rim":

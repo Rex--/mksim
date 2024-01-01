@@ -9,7 +9,7 @@ import (
 )
 
 var lastKey byte
-var switchRegister int
+var switchRegister uint16
 
 type CUIFrontPanel struct {
 	g *gocui.Gui
@@ -111,8 +111,8 @@ func (fp *CUIFrontPanel) Update(mk MK12) {
 	debugPrint(fp.g, mk.IRd)
 }
 
-func (fp *CUIFrontPanel) ReadSwitches() int16 {
-	return int16(switchRegister)
+func (fp *CUIFrontPanel) ReadSwitches() uint16 {
+	return switchRegister
 }
 
 func layout(g *gocui.Gui) error {
@@ -269,62 +269,62 @@ func loadPC(g *gocui.Gui, v *gocui.View) error {
 
 func switchRegister1(g *gocui.Gui, v *gocui.View) error {
 	switchRegister ^= 0b100000000000
-	updateRegister(g, "switch-register", int16(switchRegister))
+	updateRegister(g, "switch-register", switchRegister)
 	return nil
 }
 func switchRegister2(g *gocui.Gui, v *gocui.View) error {
 	switchRegister ^= 0b010000000000
-	updateRegister(g, "switch-register", int16(switchRegister))
+	updateRegister(g, "switch-register", switchRegister)
 	return nil
 }
 func switchRegister3(g *gocui.Gui, v *gocui.View) error {
 	switchRegister ^= 0b001000000000
-	updateRegister(g, "switch-register", int16(switchRegister))
+	updateRegister(g, "switch-register", switchRegister)
 	return nil
 }
 func switchRegister4(g *gocui.Gui, v *gocui.View) error {
 	switchRegister ^= 0b000100000000
-	updateRegister(g, "switch-register", int16(switchRegister))
+	updateRegister(g, "switch-register", switchRegister)
 	return nil
 }
 func switchRegister5(g *gocui.Gui, v *gocui.View) error {
 	switchRegister ^= 0b000010000000
-	updateRegister(g, "switch-register", int16(switchRegister))
+	updateRegister(g, "switch-register", switchRegister)
 	return nil
 }
 func switchRegister6(g *gocui.Gui, v *gocui.View) error {
 	switchRegister ^= 0b000001000000
-	updateRegister(g, "switch-register", int16(switchRegister))
+	updateRegister(g, "switch-register", switchRegister)
 	return nil
 }
 func switchRegister7(g *gocui.Gui, v *gocui.View) error {
 	switchRegister ^= 0b000000100000
-	updateRegister(g, "switch-register", int16(switchRegister))
+	updateRegister(g, "switch-register", switchRegister)
 	return nil
 }
 func switchRegister8(g *gocui.Gui, v *gocui.View) error {
 	switchRegister ^= 0b000000010000
-	updateRegister(g, "switch-register", int16(switchRegister))
+	updateRegister(g, "switch-register", switchRegister)
 	return nil
 }
 func switchRegister9(g *gocui.Gui, v *gocui.View) error {
 	switchRegister ^= 0b000000001000
-	updateRegister(g, "switch-register", int16(switchRegister))
+	updateRegister(g, "switch-register", switchRegister)
 	return nil
 }
 func switchRegister10(g *gocui.Gui, v *gocui.View) error {
 	switchRegister ^= 0b000000000100
-	updateRegister(g, "switch-register", int16(switchRegister))
+	updateRegister(g, "switch-register", switchRegister)
 	return nil
 }
 func switchRegister11(g *gocui.Gui, v *gocui.View) error {
 	switchRegister ^= 0b000000000010
-	updateRegister(g, "switch-register", int16(switchRegister))
+	updateRegister(g, "switch-register", switchRegister)
 	return nil
 }
 func switchRegister12(g *gocui.Gui, v *gocui.View) error {
 	switchRegister ^= 0b000000000001
-	updateRegister(g, "switch-register", int16(switchRegister))
+	updateRegister(g, "switch-register", switchRegister)
 	return nil
 }
 
@@ -340,15 +340,14 @@ func getLastKey() byte {
 	return b
 }
 
-func updateRegister(g *gocui.Gui, registerName string, registerVal int16) {
+func updateRegister(g *gocui.Gui, registerName string, registerVal uint16) {
 	g.Update(func(g *gocui.Gui) error {
 		v, err := g.View(registerName)
 		if err != nil {
 			return err
 		}
 		v.Clear()
-		uVal := uint16(registerVal) & 0o7777
-		fmt.Fprintf(v, " %12.12b ", uVal)
+		fmt.Fprintf(v, " %12.12b ", registerVal)
 		return nil
 	})
 }
