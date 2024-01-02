@@ -109,7 +109,7 @@ func (fp *CUIFrontPanel) Update(mk MK12) {
 	updateRegister(fp.g, "buffer-register", mk.MB)
 	updateRegister(fp.g, "switch-register", mk.SR)
 	updateMemory(fp.g, mk.MEM, mk.PC&0b0000111110000000)
-	updateAutoMemory(fp.g, mk.MEM)
+	updateZeroMemory(fp.g, mk.MEM)
 	debugPrint(fp.g, mk.IRd)
 }
 
@@ -132,10 +132,10 @@ func layout(g *gocui.Gui) error {
 
 	// Memory size
 	memWEnd := maxX - 1
-	memWidth := 42 // (4 octal numbers * 8 columns + 7 spaces in between + 2 on the outside)
+	memWidth := 45 // (4 octal numbers * 8 columns + 7 spaces in between + 2 on the outside + 1 extra + 3 for address)
 	memWStart := memWEnd - memWidth
 	memHEnd := maxY - 1
-	memHeight := 19 // 16 lines(rows) of 8 locations(cols) gives us a total of 128
+	memHeight := 18 // 16 lines(rows) of 8 locations(cols) gives us a total of 128
 	memHStart := memHEnd - memHeight
 
 	// Auto-register size
@@ -143,7 +143,7 @@ func layout(g *gocui.Gui) error {
 	autoWidth := memWidth
 	autoWStart := autoWEnd - autoWidth
 	autoHEnd := memHStart - 1
-	autoHeight := 3
+	autoHeight := 4
 	autoHStart := autoHEnd - autoHeight
 
 	// Console size
@@ -234,11 +234,11 @@ func layout(g *gocui.Gui) error {
 	}
 
 	// Auto Memory Viewer
-	if v, err := g.SetView("memory-auto", autoWStart, autoHStart, autoWEnd, autoHEnd); err != nil {
+	if v, err := g.SetView("memory-zero", autoWStart, autoHStart, autoWEnd, autoHEnd); err != nil {
 		if err != gocui.ErrUnknownView {
 			return err
 		}
-		v.Title = " AUTO "
+		v.Title = " ZERO "
 		// v.Autoscroll = true
 	}
 
@@ -417,11 +417,14 @@ func updateStatus(g *gocui.Gui, status string, atr gocui.Attribute) {
 // Updates the memory view
 // Takes the mem array and the page to display
 func updateMemory(g *gocui.Gui, mem [4096]uint16, page uint16) {
-	var memStr = fmt.Sprintf(" %04o ", mem[page])
+	memRow := 0o10
+	var memStr = fmt.Sprintf("%02o00   0    1    2    3    4    5    6    7\n", page>>6)
+	memStr += fmt.Sprintf("00  %04o ", mem[page])
 	for loc := page + 1; loc < page+128; loc++ {
 		memStr += fmt.Sprintf("%04o ", mem[loc])
-		if (loc+1)%8 == 0 {
-			memStr += "\n "
+		if (loc+1)%8 == 0 && loc+1 < page+128{
+			memStr += fmt.Sprintf("\n%02.2o  ", memRow)
+			memRow = (memRow + 0o10) % 0o100
 		}
 	}
 	g.Update(func(g *gocui.Gui) error {
@@ -435,14 +438,17 @@ func updateMemory(g *gocui.Gui, mem [4096]uint16, page uint16) {
 	})
 }
 
-func updateAutoMemory(g *gocui.Gui, mem [4096]uint16) {
-	page := 0o10
-	var memStr = fmt.Sprintf(" %04o ", mem[page])
-	for loc := page + 1; loc < page+8; loc++ {
+func updateZeroMemory(g *gocui.Gui, mem [4096]uint16) {
+	var memStr = "0000   0    1    2    3    4    5    6    7\n"
+	memStr += fmt.Sprintf("00  %04o ", mem[0])
+	for loc := 1; loc < 16; loc++ {
 		memStr += fmt.Sprintf("%04o ", mem[loc])
+		if loc == 7 {
+			memStr += "\n10  "
+		}
 	}
 	g.Update(func(g *gocui.Gui) error {
-		v, err := g.View("memory-auto")
+		v, err := g.View("memory-zero")
 		if err != nil {
 			return err
 		}
