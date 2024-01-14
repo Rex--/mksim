@@ -12,7 +12,8 @@ var lastKey byte
 var switchRegister uint16
 
 type CUIFrontPanel struct {
-	g *gocui.Gui
+	g                *gocui.Gui
+	MemoryViewerPage int
 }
 
 func (fp *CUIFrontPanel) PowerOn(mk MK12) {
@@ -108,9 +109,14 @@ func (fp *CUIFrontPanel) Update(mk MK12) {
 	updateRegister(fp.g, "address-register", mk.MA)
 	updateRegister(fp.g, "buffer-register", mk.MB)
 	updateRegister(fp.g, "switch-register", mk.SR)
-	updateMemory(fp.g, mk.MEM, mk.PC&0b0000111110000000)
-	updateZeroMemory(fp.g, mk.MEM)
 	debugPrint(fp.g, mk.IRd)
+
+	if 0 <= fp.MemoryViewerPage && fp.MemoryViewerPage <= 0o7777 {
+		updateMemory(fp.g, mk.MEM, uint16(fp.MemoryViewerPage)&0b0000111110000000)
+	} else {
+		updateMemory(fp.g, mk.MEM, mk.PC&0b0000111110000000)
+	}
+	updateZeroMemory(fp.g, mk.MEM)
 }
 
 func (fp *CUIFrontPanel) ReadSwitches() uint16 {
@@ -422,7 +428,7 @@ func updateMemory(g *gocui.Gui, mem [4096]uint16, page uint16) {
 	memStr += fmt.Sprintf("00  %04o ", mem[page])
 	for loc := page + 1; loc < page+128; loc++ {
 		memStr += fmt.Sprintf("%04o ", mem[loc])
-		if (loc+1)%8 == 0 && loc+1 < page+128{
+		if (loc+1)%8 == 0 && loc+1 < page+128 {
 			memStr += fmt.Sprintf("\n%02.2o  ", memRow)
 			memRow = (memRow + 0o10) % 0o100
 		}

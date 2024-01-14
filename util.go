@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"os"
 	"strconv"
@@ -14,7 +15,7 @@ func MKadd(a, b uint16) (x uint16, c bool) {
 	c = false
 	x = a + b
 	// Check for 12-bit overflow
-	if (x > 4095) {
+	if x > 4095 {
 		c = true
 		x = x - 4096
 	}
@@ -74,7 +75,7 @@ func LoadPObjFile(filename string) (mem [4096]uint16, err error) {
 	// Open file and create new scanner
 	objFile, err := os.Open(filename)
 	if err != nil {
-		panic(err)
+		return
 	}
 	defer objFile.Close()
 	scanner := bufio.NewScanner(objFile)
@@ -86,7 +87,7 @@ func LoadPObjFile(filename string) (mem [4096]uint16, err error) {
 	for scanner.Scan() {
 		rawData, err = strconv.ParseUint(scanner.Text(), 8, 16)
 		if err != nil {
-			panic(err)
+			return
 		}
 		data = uint16(rawData)
 
@@ -109,7 +110,7 @@ func LoadRIMFile(filename string) (mem [4096]uint16, err error) {
 	// Open file and create a new reader
 	rimFile, err := os.Open(filename)
 	if err != nil {
-		panic("couldn't open file")
+		return
 	}
 	defer rimFile.Close()
 
@@ -117,9 +118,9 @@ func LoadRIMFile(filename string) (mem [4096]uint16, err error) {
 
 	// Skip over leading `0o200` bytes
 	for b, _ := rimReader.Peek(1); b[0] == 0o200; b, _ = rimReader.Peek(1) {
-		_, err := rimReader.Discard(1)
+		_, err = rimReader.Discard(1)
 		if err != nil {
-			panic(err)
+			return
 		}
 	}
 
@@ -129,14 +130,15 @@ func LoadRIMFile(filename string) (mem [4096]uint16, err error) {
 		read, err := rimReader.Read(block)
 		if read != len(block) && read > 0 { // Sometimes err == EOF and read != 0
 			if block[0] != 0o200 {
-				panic("Incorrect format")
+				return mem, err
+				// panic("Incorrect format")
 			}
 		}
 		if err != nil {
 			if err == io.EOF {
 				break
 			} else {
-				panic(err)
+				return mem, err
 			}
 		}
 
@@ -148,7 +150,8 @@ func LoadRIMFile(filename string) (mem [4096]uint16, err error) {
 			addr = (uint16(block[0]&0o77) << 6) | uint16(block[1]&0o77)
 			data = (uint16(block[2]&0o77) << 6) | uint16(block[3]&0o77)
 		} else {
-			panic("Incorrect format")
+			return mem, fmt.Errorf("incorrect format")
+			// panic("Incorrect format")
 		}
 
 		mem[addr] = data

@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"os/exec"
 	"path"
 	"strconv"
 	"time"
@@ -448,12 +447,13 @@ func (mk *MK12) execute() {
 			mk.IRd = debugInst
 
 		case OPR_GROUP_3:
-			println("instruction:", strconv.Itoa(int(mk.IR)))
-			panic("group 3 operate instructions not implemented")
+			fmt.Fprintf(os.Stderr, "ERROR: group 3 operate instructions not implemented!\ninstruction: %04o\n", mk.IR)
+			os.Exit(1)
 		}
 
 	default:
-		panic("instruction:" + strconv.Itoa(int(mk.IR)))
+		fmt.Fprintf(os.Stderr, "ERROR: Unknown instruction:"+strconv.Itoa(int(mk.IR)))
+		os.Exit(1)
 	}
 }
 
@@ -504,6 +504,7 @@ func main() {
 		myMK12.IOT = append(myMK12.IOT, &teleType)
 	} else {
 		cfp := new(CUIFrontPanel)
+		cfp.MemoryViewerPage = args.Page
 		myMK12.fp = cfp
 		// Power up the front panel
 		myMK12.fp.PowerOn(myMK12)
@@ -546,24 +547,26 @@ func main() {
 		m, err = LoadPObjFile(args.InFile)
 	}
 	if err != nil {
-		panic(err)
-	}
-	myMK12.MEM = m
+		fmt.Fprintf(os.Stderr, "ERROR: Unknown input file")
+		myMK12.AC = 1
+	} else {
+		myMK12.MEM = m
 
-	// Set PC to RESET vector and start computer
-	myMK12.PC = 0o200
-	myMK12.run()
-	myMK12.fp.PowerOff()
+		// Set PC to RESET vector and start computer
+		myMK12.PC = 0o200
+		myMK12.run()
+		myMK12.fp.PowerOff()
+	}
 
 	if args.Return {
 		println(strconv.FormatInt(int64(myMK12.AC), 10))
 	}
 
 	// re enable stdin character echoing
-	err = exec.Command("stty", "-F", "/dev/tty", "echo").Run()
-	if err != nil {
-		panic(err)
-	}
+	// _ = exec.Command("stty", "-F", "/dev/tty", "echo").Run()
+	// if err != nil {
+	// 	panic(err)
+	// }
 
 	os.Exit(int(myMK12.AC))
 }

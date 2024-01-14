@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"io"
@@ -28,6 +29,9 @@ type CLIArgs struct {
 	TapeFile  string
 	iTapeFile string
 	oTapeFile string
+
+	// Lock memory viewer to page
+	Page int
 }
 
 func printUsage() {
@@ -46,6 +50,8 @@ func parseArgs() CLIArgs {
 
 	// Add flags
 	flag.Int64Var(&args.F_CPU, "F_CPU", 8000000, "simulated clock `speed`")
+
+	flag.IntVar(&args.Page, "lock", -1, "Lock memory viewer to `page`")
 
 	flag.BoolVar(&args.HALT, "halt", false, "HALT the machine before first instruction cycle")
 	flag.BoolVar(&args.EXIT, "exit", false, "Exit the simulator on HALT")
@@ -106,26 +112,54 @@ func (fp *CLIFrontPanel) ReadSwitches() uint16 {
 }
 
 type StdinKeyboard struct {
-	Stdin   *os.File
-	lastKey []byte
+	Stdin             *os.File
+	lastKey           []byte
+	originalSttyState bytes.Buffer
+}
+
+func (sk *StdinKeyboard) getSttyState(state *bytes.Buffer) (err error) {
+	cmd := exec.Command("stty", "-g")
+	cmd.Stdin = sk.Stdin
+	cmd.Stdout = state
+	return cmd.Run()
+}
+
+func (sk *StdinKeyboard) saveSttyState() (err error) {
+	cmd := exec.Command("stty", "-g")
+	cmd.Stdin = sk.Stdin
+	cmd.Stdout = &sk.originalSttyState
+	return cmd.Run()
+}
+
+func (sk *StdinKeyboard) setSttyState(state *bytes.Buffer) (err error) {
+	cmd := exec.Command("stty", state.String())
+	cmd.Stdin = sk.Stdin
+	cmd.Stdout = nil
+	return cmd.Run()
 }
 
 func NewStdinKeyboard() (sk StdinKeyboard) {
+	sk = StdinKeyboard{
+		Stdin:   os.Stdin,
+		lastKey: make([]byte, 1),
+	}
+	sk.saveSttyState()
+	defer sk.ResetSttyState()
+
 	// disable input buffering
-	err := exec.Command("stty", "-F", "/dev/tty", "cbreak", "min", "1").Run()
+	err := sk.setSttyState(bytes.NewBufferString("cbreak"))
+	// err := exec.Command("stty", "-F", "/dev/tty", "cbreak", "min", "1").Run()
 	if err != nil {
 		panic(err)
 	}
 	// do not display entered characters on the screen
-	err = exec.Command("stty", "-F", "/dev/tty", "-echo").Run()
+	err = sk.setSttyState(bytes.NewBufferString("-echo"))
+	// err = exec.Command("stty", "-F", "/dev/tty", "-echo").Run()
 	if err != nil {
 		panic(err)
 	}
 
-	return StdinKeyboard{
-		Stdin:   os.Stdin,
-		lastKey: make([]byte, 1),
-	}
+	return sk
 }
 
 func (sk StdinKeyboard) Buffered() (buffered int) {
@@ -143,4 +177,8 @@ func (sk StdinKeyboard) Buffered() (buffered int) {
 func (sk StdinKeyboard) ReadByte() (char byte, err error) {
 	char = sk.lastKey[0]
 	return
+}
+
+func (sk *StdinKeyboard) ResetSttyState() {
+	sk.setSttyState(&sk.originalSttyState)
 }
